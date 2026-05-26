@@ -1,0 +1,32 @@
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+
+from apps.accounts.models import Role
+from apps.accounts.permissions import RoleBasedPermission
+from apps.audit.mixins import AuditLogMixin
+from apps.donors.models import Donor, DonorCommunication
+from apps.donors.serializers import DonorCommunicationSerializer, DonorSerializer
+
+
+class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = Donor.objects.all()
+    serializer_class = DonorSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.DONOR_USER]
+    filterset_fields = ["status", "category", "country"]
+    search_fields = ["organization_name", "contact_person", "contact_email", "category"]
+    ordering_fields = ["organization_name", "created_at", "status"]
+
+
+class DonorCommunicationViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = DonorCommunication.objects.select_related("donor", "created_by")
+    serializer_class = DonorCommunicationSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR]
+    filterset_fields = ["donor", "created_by", "channel"]
+    search_fields = ["subject", "message", "channel"]
+    ordering_fields = ["communication_date"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(created_by=self.request.user)
+        self._write_audit_log(self.audit_create_action, instance)
