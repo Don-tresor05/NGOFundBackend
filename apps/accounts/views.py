@@ -83,12 +83,15 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
 
 
 class NotificationViewSet(viewsets.ModelViewSet):
+    queryset = Notification.objects.none()
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
     search_fields = ["title", "message", "type"]
     ordering_fields = ["created_at", "is_read"]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Notification.objects.none()
         if self.request.user.role == Role.SUPER_ADMIN:
             return Notification.objects.all()
         return Notification.objects.filter(user=self.request.user)
