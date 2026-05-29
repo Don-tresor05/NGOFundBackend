@@ -4,14 +4,14 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-secret-key")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-secret-key-for-local-development-only")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")]
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "DJANGO_CORS_ALLOWED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174",
+        "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
     ).split(",")
 ]
 
