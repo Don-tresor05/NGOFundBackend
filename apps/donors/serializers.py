@@ -14,3 +14,4 @@ class DonorCommunicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = DonorCommunication
         fields = "__all__"
+        read_only_fields = ["created_by"]

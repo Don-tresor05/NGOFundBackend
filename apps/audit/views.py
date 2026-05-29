@@ -8,7 +8,7 @@ from apps.audit.models import AuditLog, Document
 from apps.audit.serializers import AuditLogSerializer, DocumentSerializer
 
 
-class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+class AuditLogViewSet(AuditLogMixin, viewsets.ModelViewSet):
     queryset = AuditLog.objects.select_related("user")
     serializer_class = AuditLogSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]

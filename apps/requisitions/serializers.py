@@ -7,7 +7,7 @@ class RequisitionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Requisition
         fields = "__all__"
-        read_only_fields = ["created_at"]
+        read_only_fields = ["submitted_by", "created_at"]
 
     def validate(self, attrs):
         budget_line = attrs.get("budget_line", getattr(self.instance, "budget_line", None))
