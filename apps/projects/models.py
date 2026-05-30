@@ -36,3 +36,40 @@ class BudgetLine(models.Model):
     @property
     def remaining_amount(self):
         return self.allocated_amount - self.spent_amount
+
+
+class ReallocationRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    source_budget_line = models.ForeignKey(
+        "projects.BudgetLine",
+        on_delete=models.PROTECT,
+        related_name="reallocation_sources",
+    )
+    target_budget_line = models.ForeignKey(
+        "projects.BudgetLine",
+        on_delete=models.PROTECT,
+        related_name="reallocation_targets",
+    )
+    requested_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="reallocation_requests")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_reallocation_requests",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Reallocation #{self.pk} - {self.amount}"
