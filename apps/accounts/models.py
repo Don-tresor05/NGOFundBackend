@@ -64,3 +64,18 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class PasswordResetRequest(models.Model):
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="password_reset_requests")
+    token = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Password reset for {self.user.email}"

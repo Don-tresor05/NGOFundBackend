@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Notification, SystemSetting
+from apps.accounts.models import Notification, PasswordResetRequest, SystemSetting
 
 User = get_user_model()
 
@@ -87,3 +87,19 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = "__all__"
         read_only_fields = ["created_at"]
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    new_password = serializers.CharField(min_length=8, write_only=True)
+
+
+class PasswordResetRequestModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PasswordResetRequest
+        fields = "__all__"
+        read_only_fields = ["user", "expires_at", "is_used", "used_at", "created_at"]
