@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
-from apps.testing_validation.models import TestCase, UATFeedback
+from apps.testing_validation.models import BugReport, ReleaseNote, TestCase, UATFeedback
 
 User = get_user_model()
 
@@ -66,3 +66,27 @@ class TestingValidationWorkflowTests(APITestCase):
         close_response = self.client.post(reverse("uat-feedback-close", args=[feedback.pk]))
         self.assertEqual(close_response.status_code, 200)
         self.assertEqual(close_response.data["status"], UATFeedback.Status.CLOSED)
+
+    def test_bug_board_and_release_notes(self):
+        bug = BugReport.objects.create(
+            reported_by=self.user,
+            title="Login page alignment issue",
+            description="The login card is slightly elevated.",
+            environment="Staging",
+            severity=BugReport.Severity.MEDIUM,
+        )
+        triage_response = self.client.post(reverse("bug-reports-triage", args=[bug.pk]))
+        self.assertEqual(triage_response.status_code, 200)
+        self.assertEqual(triage_response.data["status"], BugReport.Status.TRIAGED)
+
+        release_note = ReleaseNote.objects.create(
+            version="v1.2.0",
+            title="Workflow hardening release",
+            summary="Adds workflow controls and board actions.",
+            changelog="Added approval chains and schedules.",
+            environment="Production",
+            created_by=self.user,
+        )
+        publish_response = self.client.post(reverse("release-notes-publish", args=[release_note.pk]))
+        self.assertEqual(publish_response.status_code, 200)
+        self.assertEqual(publish_response.data["status"], ReleaseNote.Status.PUBLISHED)

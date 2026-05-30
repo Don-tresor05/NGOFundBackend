@@ -17,13 +17,13 @@ from apps.accounts.views import (
 from apps.audit.views import AuditLogViewSet, DocumentViewSet
 from apps.compliance.views import ComplianceItemViewSet
 from apps.donors.views import DonorCommunicationViewSet, DonorViewSet
-from apps.finance.views import TransactionViewSet
+from apps.finance.views import ExpenseApprovalViewSet, TransactionViewSet
 from apps.grants.views import GrantViewSet
-from apps.operations.views import StaffRequirementViewSet
-from apps.projects.views import BudgetLineViewSet, ProjectViewSet
-from apps.reports.views import ReportViewSet
+from apps.operations.views import ProcessDocumentViewSet, StaffRequirementViewSet
+from apps.projects.views import BudgetLineViewSet, ProjectViewSet, ReallocationRequestViewSet
+from apps.reports.views import ReportScheduleViewSet, ReportViewSet
 from apps.requisitions.views import RequisitionViewSet
-from apps.testing_validation.views import TestCaseViewSet, UATFeedbackViewSet
+from apps.testing_validation.views import BugReportViewSet, ReleaseNoteViewSet, TestCaseViewSet, UATFeedbackViewSet
 
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="users")
@@ -34,15 +34,21 @@ router.register("donor-communications", DonorCommunicationViewSet, basename="don
 router.register("grants", GrantViewSet, basename="grants")
 router.register("projects", ProjectViewSet, basename="projects")
 router.register("budget-lines", BudgetLineViewSet, basename="budget-lines")
+router.register("reallocation-requests", ReallocationRequestViewSet, basename="reallocation-requests")
 router.register("requisitions", RequisitionViewSet, basename="requisitions")
+router.register("expense-approvals", ExpenseApprovalViewSet, basename="expense-approvals")
 router.register("transactions", TransactionViewSet, basename="transactions")
 router.register("reports", ReportViewSet, basename="reports")
+router.register("report-schedules", ReportScheduleViewSet, basename="report-schedules")
 router.register("audit-logs", AuditLogViewSet, basename="audit-logs")
 router.register("documents", DocumentViewSet, basename="documents")
 router.register("compliance-items", ComplianceItemViewSet, basename="compliance-items")
 router.register("staff-requirements", StaffRequirementViewSet, basename="staff-requirements")
+router.register("process-documents", ProcessDocumentViewSet, basename="process-documents")
 router.register("test-cases", TestCaseViewSet, basename="test-cases")
 router.register("uat-feedback", UATFeedbackViewSet, basename="uat-feedback")
+router.register("bug-reports", BugReportViewSet, basename="bug-reports")
+router.register("release-notes", ReleaseNoteViewSet, basename="release-notes")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

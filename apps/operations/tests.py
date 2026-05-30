@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 
-from apps.operations.models import StaffRequirement
+from apps.operations.models import ProcessDocument, StaffRequirement
 
 User = get_user_model()
 
@@ -63,3 +63,16 @@ class StaffRequirementWorkflowTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_process_document_publish_flow(self):
+        document = ProcessDocument.objects.create(
+            title="Procurement Procedure",
+            version="v1",
+            summary="Procurement operating procedure",
+            content="1. Receive request\n2. Review\n3. Approve",
+            created_by=self.user,
+        )
+
+        publish_response = self.client.post(reverse("process-documents-publish", args=[document.pk]))
+        self.assertEqual(publish_response.status_code, 200)
+        self.assertEqual(publish_response.data["status"], ProcessDocument.Status.PUBLISHED)

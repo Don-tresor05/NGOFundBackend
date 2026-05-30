@@ -32,3 +32,34 @@ class StaffRequirement(models.Model):
 
     def __str__(self) -> str:
         return f"{self.process_area} - {self.interviewee_name}"
+
+
+class ProcessDocument(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        IN_REVIEW = "in_review", "In Review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        PUBLISHED = "published", "Published"
+
+    title = models.CharField(max_length=180)
+    version = models.CharField(max_length=40, default="v1")
+    summary = models.CharField(max_length=255, blank=True)
+    content = models.TextField()
+    created_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="process_documents")
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_process_documents",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return self.title

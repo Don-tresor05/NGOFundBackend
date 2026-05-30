@@ -48,3 +48,71 @@ class UATFeedback(models.Model):
 
     def __str__(self) -> str:
         return f"Feedback for {self.test_case_id}"
+
+
+class BugReport(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        TRIAGED = "triaged", "Triaged"
+        IN_PROGRESS = "in_progress", "In Progress"
+        RESOLVED = "resolved", "Resolved"
+        CLOSED = "closed", "Closed"
+
+    class Severity(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+        CRITICAL = "critical", "Critical"
+
+    reported_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="bug_reports")
+    assigned_to = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_bug_reports",
+    )
+    title = models.CharField(max_length=180)
+    description = models.TextField()
+    reproduction_steps = models.TextField(blank=True)
+    environment = models.CharField(max_length=80)
+    severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.MEDIUM)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class ReleaseNote(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
+
+    version = models.CharField(max_length=40)
+    title = models.CharField(max_length=180)
+    summary = models.TextField()
+    changelog = models.TextField()
+    environment = models.CharField(max_length=80)
+    created_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="release_notes")
+    published_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="published_release_notes",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    published_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.version} - {self.title}"

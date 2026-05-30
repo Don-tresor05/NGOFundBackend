@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.testing_validation.models import TestCase, UATFeedback
+from apps.testing_validation.models import BugReport, ReleaseNote, TestCase, UATFeedback
 
 
 class TestCaseSerializer(serializers.ModelSerializer):
@@ -17,8 +17,6 @@ class TestCaseSerializer(serializers.ModelSerializer):
                 TestCase.Status.TODO,
                 TestCase.Status.IN_PROGRESS,
                 TestCase.Status.IN_REVIEW,
-                TestCase.Status.APPROVED,
-                TestCase.Status.REJECTED,
             },
             TestCase.Status.IN_PROGRESS: {
                 TestCase.Status.IN_PROGRESS,
@@ -66,3 +64,17 @@ class UATFeedbackSerializer(serializers.ModelSerializer):
         if status not in allowed_transitions[current_status]:
             raise serializers.ValidationError("Invalid UAT feedback status transition.")
         return attrs
+
+
+class BugReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BugReport
+        fields = "__all__"
+        read_only_fields = ["reported_by", "assigned_to", "resolved_at", "created_at"]
+
+
+class ReleaseNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReleaseNote
+        fields = "__all__"
+        read_only_fields = ["created_by", "published_by", "published_at", "created_at"]

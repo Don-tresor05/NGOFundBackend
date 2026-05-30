@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.operations.models import StaffRequirement
+from apps.operations.models import ProcessDocument, StaffRequirement
 
 
 class StaffRequirementSerializer(serializers.ModelSerializer):
@@ -44,3 +44,10 @@ class StaffRequirementSerializer(serializers.ModelSerializer):
         if validation_status == StaffRequirement.ValidationStatus.REJECTED and (signed_off_by or signed_off_at):
             raise serializers.ValidationError("Rejected staff requirements cannot carry sign-off metadata.")
         return attrs
+
+
+class ProcessDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProcessDocument
+        fields = "__all__"
+        read_only_fields = ["created_by", "approved_by", "created_at", "updated_at"]
