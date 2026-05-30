@@ -14,4 +14,4 @@ class DocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
         fields = "__all__"
-        read_only_fields = ["uploaded_at"]
+        read_only_fields = ["uploaded_by", "uploaded_at"]

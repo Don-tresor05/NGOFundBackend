@@ -24,6 +24,14 @@ class StaffRequirementViewSet(AuditLogMixin, viewsets.ModelViewSet):
         instance = serializer.save(captured_by=self.request.user)
         self._write_audit_log(self.audit_create_action, instance)
 
+    @action(detail=True, methods=["post"], url_path="review")
+    def review(self, request, pk=None):
+        requirement = self.get_object()
+        requirement.validation_status = StaffRequirement.ValidationStatus.IN_REVIEW
+        requirement.save(update_fields=["validation_status"])
+        self._write_audit_log("REQUIREMENT_REVIEWED", requirement)
+        return Response(self.get_serializer(requirement).data)
+
     @action(detail=True, methods=["post"], url_path="sign-off")
     def sign_off(self, request, pk=None):
         requirement = self.get_object()
@@ -32,4 +40,14 @@ class StaffRequirementViewSet(AuditLogMixin, viewsets.ModelViewSet):
         requirement.signed_off_at = timezone.now()
         requirement.save(update_fields=["validation_status", "signed_off_by", "signed_off_at"])
         self._write_audit_log("REQUIREMENT_SIGNED_OFF", requirement)
+        return Response(self.get_serializer(requirement).data)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        requirement = self.get_object()
+        requirement.validation_status = StaffRequirement.ValidationStatus.REJECTED
+        requirement.signed_off_by = None
+        requirement.signed_off_at = None
+        requirement.save(update_fields=["validation_status", "signed_off_by", "signed_off_at"])
+        self._write_audit_log("REQUIREMENT_REJECTED", requirement)
         return Response(self.get_serializer(requirement).data)

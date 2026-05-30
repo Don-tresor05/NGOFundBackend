@@ -7,6 +7,7 @@ class TestCase(models.Model):
         IN_PROGRESS = "in_progress", "In Progress"
         IN_REVIEW = "in_review", "In Review"
         APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
 
     class Priority(models.TextChoices):
         LOW = "low", "Low"
@@ -30,10 +31,16 @@ class TestCase(models.Model):
 
 
 class UATFeedback(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        IN_REVIEW = "in_review", "In Review"
+        RESOLVED = "resolved", "Resolved"
+        CLOSED = "closed", "Closed"
+
     test_case = models.ForeignKey("testing_validation.TestCase", on_delete=models.CASCADE, related_name="uat_feedback")
     submitted_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="uat_feedback")
     feedback = models.TextField()
-    status = models.CharField(max_length=50, default="open")
+    status = models.CharField(max_length=50, choices=Status.choices, default=Status.OPEN)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -23,9 +23,20 @@ class ComplianceItemViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="verify")
     def verify(self, request, pk=None):
         item = self.get_object()
-        item.verified = True
-        item.verified_by = request.user
-        item.verified_at = timezone.now()
+        if not item.verified:
+            item.verified = True
+            item.verified_by = request.user
+            item.verified_at = timezone.now()
         item.save(update_fields=["verified", "verified_by", "verified_at"])
         self._write_audit_log("COMPLIANCE_VERIFIED", item)
+        return Response(self.get_serializer(item).data)
+
+    @action(detail=True, methods=["post"], url_path="unverify")
+    def unverify(self, request, pk=None):
+        item = self.get_object()
+        item.verified = False
+        item.verified_by = None
+        item.verified_at = None
+        item.save(update_fields=["verified", "verified_by", "verified_at"])
+        self._write_audit_log("COMPLIANCE_UNVERIFIED", item)
         return Response(self.get_serializer(item).data)
