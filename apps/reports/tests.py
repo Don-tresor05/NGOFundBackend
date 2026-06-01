@@ -67,3 +67,6 @@ class ReportWorkflowTests(APITestCase):
         self.assertEqual(deliver_response.status_code, 200)
         self.assertTrue(ReportDelivery.objects.filter(report=report, status=ReportDelivery.Status.SENT).exists())
 
+        deliveries_response = self.client.get(reverse("report-deliveries-list"))
+        self.assertEqual(deliveries_response.status_code, 200)
+        self.assertGreaterEqual(len(deliveries_response.data), 1)
