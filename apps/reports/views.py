@@ -41,6 +41,20 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
         return Response(ReportDeliverySerializer(delivery).data)
 
 
+class ReportDeliveryViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = ReportDelivery.objects.select_related("report", "created_by")
+    serializer_class = ReportDeliverySerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR]
+    filterset_fields = ["report", "created_by", "delivery_method", "status"]
+    search_fields = ["destination", "report__report_type"]
+    ordering_fields = ["created_at", "sent_at", "status"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(created_by=self.request.user)
+        self._write_audit_log(self.audit_create_action, instance)
+
+
 class ReportScheduleViewSet(AuditLogMixin, viewsets.ModelViewSet):
     queryset = ReportSchedule.objects.select_related("grant", "created_by")
     serializer_class = ReportScheduleSerializer

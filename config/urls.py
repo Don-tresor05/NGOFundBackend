@@ -21,7 +21,7 @@ from apps.finance.views import ExpenseApprovalViewSet, TransactionViewSet
 from apps.grants.views import GrantViewSet
 from apps.operations.views import ProcessDocumentViewSet, StaffRequirementViewSet
 from apps.projects.views import BudgetLineViewSet, ProjectViewSet, ReallocationRequestViewSet
-from apps.reports.views import ReportScheduleViewSet, ReportViewSet
+from apps.reports.views import ReportDeliveryViewSet, ReportScheduleViewSet, ReportViewSet
 from apps.requisitions.views import RequisitionViewSet
 from apps.testing_validation.views import BugReportViewSet, ReleaseNoteViewSet, TestCaseViewSet, UATFeedbackViewSet
 
@@ -39,6 +39,7 @@ router.register("requisitions", RequisitionViewSet, basename="requisitions")
 router.register("expense-approvals", ExpenseApprovalViewSet, basename="expense-approvals")
 router.register("transactions", TransactionViewSet, basename="transactions")
 router.register("reports", ReportViewSet, basename="reports")
+router.register("report-deliveries", ReportDeliveryViewSet, basename="report-deliveries")
 router.register("report-schedules", ReportScheduleViewSet, basename="report-schedules")
 router.register("audit-logs", AuditLogViewSet, basename="audit-logs")
 router.register("documents", DocumentViewSet, basename="documents")
