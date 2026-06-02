@@ -19,7 +19,7 @@ class ReallocationWorkflowTests(APITestCase):
             email="manager@example.com",
             password="password123",
             full_name="Project Manager",
-            role="PROJECT_MANAGER",
+            role_id="PROJECT_MANAGER",
         )
         self.client.force_authenticate(self.user)
         donor = Donor.objects.create(
@@ -61,4 +61,3 @@ class ReallocationWorkflowTests(APITestCase):
         self.target.refresh_from_db()
         self.assertEqual(str(self.source.allocated_amount), "17000.00")
         self.assertEqual(str(self.target.allocated_amount), "13000.00")
-
