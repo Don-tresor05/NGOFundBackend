@@ -1,6 +1,22 @@
 from django.db import models
 
 
+class BankAccount(models.Model):
+    account_name = models.CharField(max_length=180)
+    bank_name = models.CharField(max_length=180)
+    account_number = models.CharField(max_length=100, unique=True)
+    currency = models.CharField(max_length=10)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["bank_name", "account_name"]
+        db_table = "bank_accounts"
+
+    def __str__(self) -> str:
+        return f"{self.bank_name} - {self.account_name}"
+
+
 class Transaction(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -9,6 +25,13 @@ class Transaction(models.Model):
 
     requisition = models.ForeignKey("requisitions.Requisition", on_delete=models.PROTECT, related_name="transactions")
     budget_line = models.ForeignKey("projects.BudgetLine", on_delete=models.PROTECT, related_name="transactions")
+    bank_account = models.ForeignKey(
+        "finance.BankAccount",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
     processed_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="processed_transactions")
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     transaction_date = models.DateField()
@@ -18,6 +41,7 @@ class Transaction(models.Model):
 
     class Meta:
         ordering = ["-transaction_date", "-created_at"]
+        db_table = "transactions"
 
     def __str__(self) -> str:
         return self.bank_reference_number
@@ -53,6 +77,78 @@ class ExpenseApproval(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "expense_approvals"
 
     def __str__(self) -> str:
         return f"Expense approval #{self.pk} - {self.stage}"
+
+
+class BankStatement(models.Model):
+    bank_account = models.ForeignKey("finance.BankAccount", on_delete=models.PROTECT, related_name="statements")
+    statement_number = models.CharField(max_length=100)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    opening_balance = models.DecimalField(max_digits=14, decimal_places=2)
+    closing_balance = models.DecimalField(max_digits=14, decimal_places=2)
+    imported_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="bank_statements")
+    statement_file = models.FileField(upload_to="bank-statements/", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        db_table = "bank_statements"
+        constraints = [
+            models.UniqueConstraint(fields=["bank_account", "statement_number"], name="unique_bank_statement")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.bank_account.account_name} #{self.statement_number}"
+
+
+class BankStatementLine(models.Model):
+    bank_statement = models.ForeignKey("finance.BankStatement", on_delete=models.CASCADE, related_name="lines")
+    transaction_date = models.DateField()
+    description = models.TextField()
+    reference_number = models.CharField(max_length=120, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    matched = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-transaction_date", "id"]
+        db_table = "bank_statement_lines"
+
+    def __str__(self) -> str:
+        return self.reference_number or self.description[:40]
+
+
+class Reconciliation(models.Model):
+    class Status(models.TextChoices):
+        MATCHED = "matched", "Matched"
+        UNMATCHED = "unmatched", "Unmatched"
+        EXCEPTION = "exception", "Exception"
+
+    transaction = models.ForeignKey("finance.Transaction", on_delete=models.CASCADE, related_name="reconciliations")
+    bank_statement_line = models.ForeignKey(
+        "finance.BankStatementLine",
+        on_delete=models.CASCADE,
+        related_name="reconciliations",
+    )
+    reviewed_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="reconciliations")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.UNMATCHED)
+    difference_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+    matched_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        db_table = "reconciliations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transaction", "bank_statement_line"],
+                name="unique_transaction_statement_line_reconciliation",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Reconciliation #{self.pk} - {self.status}"

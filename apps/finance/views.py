@@ -8,8 +8,15 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
-from apps.finance.models import ExpenseApproval, Transaction
-from apps.finance.serializers import ExpenseApprovalSerializer, TransactionSerializer
+from apps.finance.models import BankAccount, BankStatement, BankStatementLine, ExpenseApproval, Reconciliation, Transaction
+from apps.finance.serializers import (
+    BankAccountSerializer,
+    BankStatementLineSerializer,
+    BankStatementSerializer,
+    ExpenseApprovalSerializer,
+    ReconciliationSerializer,
+    TransactionSerializer,
+)
 from apps.requisitions.models import Requisition
 
 
@@ -106,3 +113,51 @@ class ExpenseApprovalViewSet(AuditLogMixin, viewsets.ModelViewSet):
         requisition.save(update_fields=["status", "rejection_reason"])
         self._write_audit_log("EXPENSE_REJECTED", approval)
         return Response(self.get_serializer(approval).data)
+
+
+class BankAccountViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = BankAccount.objects.all()
+    serializer_class = BankAccountSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR]
+    filterset_fields = ["bank_name", "currency", "is_active"]
+    search_fields = ["account_name", "bank_name", "account_number", "currency"]
+    ordering_fields = ["bank_name", "account_name", "created_at"]
+
+
+class BankStatementViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = BankStatement.objects.select_related("bank_account", "imported_by")
+    serializer_class = BankStatementSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR]
+    filterset_fields = ["bank_account", "imported_by"]
+    search_fields = ["statement_number", "bank_account__account_name", "bank_account__bank_name"]
+    ordering_fields = ["created_at", "period_start", "period_end"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(imported_by=self.request.user)
+        self._write_audit_log(self.audit_create_action, instance)
+
+
+class BankStatementLineViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = BankStatementLine.objects.select_related("bank_statement")
+    serializer_class = BankStatementLineSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR]
+    filterset_fields = ["bank_statement", "matched"]
+    search_fields = ["description", "reference_number"]
+    ordering_fields = ["transaction_date", "amount", "matched"]
+
+
+class ReconciliationViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = Reconciliation.objects.select_related("transaction", "bank_statement_line", "reviewed_by")
+    serializer_class = ReconciliationSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR]
+    filterset_fields = ["transaction", "bank_statement_line", "reviewed_by", "status"]
+    search_fields = ["notes", "transaction__bank_reference_number", "bank_statement_line__reference_number"]
+    ordering_fields = ["created_at", "matched_at", "status"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(reviewed_by=self.request.user)
+        self._write_audit_log(self.audit_create_action, instance)
