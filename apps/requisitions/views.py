@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
-from apps.requisitions.models import Requisition
-from apps.requisitions.serializers import RequisitionSerializer
+from apps.requisitions.models import Requisition, RequisitionItem
+from apps.requisitions.serializers import RequisitionItemSerializer, RequisitionSerializer
 
 
 class RequisitionViewSet(AuditLogMixin, viewsets.ModelViewSet):
@@ -40,3 +40,17 @@ class RequisitionViewSet(AuditLogMixin, viewsets.ModelViewSet):
         requisition.save(update_fields=["status", "rejection_reason"])
         self._write_audit_log("REQUISITION_REJECTED", requisition)
         return Response(self.get_serializer(requisition).data, status=status.HTTP_200_OK)
+
+
+class RequisitionItemViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = RequisitionItem.objects.select_related("requisition")
+    serializer_class = RequisitionItemSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FIELD_STAFF, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR, Role.FINANCE_OFFICER]
+    filterset_fields = ["requisition"]
+    search_fields = ["item_name", "description", "requisition__description"]
+    ordering_fields = ["line_total", "quantity", "item_name"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        self._write_audit_log(self.audit_create_action, instance)

@@ -18,6 +18,27 @@ class Requisition(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "requisitions"
 
     def __str__(self) -> str:
         return f"Requisition #{self.pk} - {self.amount}"
+
+
+class RequisitionItem(models.Model):
+    requisition = models.ForeignKey("requisitions.Requisition", on_delete=models.CASCADE, related_name="items")
+    item_name = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=2, default=1)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
+    line_total = models.DecimalField(max_digits=14, decimal_places=2, editable=False)
+
+    class Meta:
+        ordering = ["requisition", "id"]
+        db_table = "requisition_items"
+
+    def save(self, *args, **kwargs):
+        self.line_total = self.quantity * self.unit_cost
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.item_name} ({self.line_total})"
