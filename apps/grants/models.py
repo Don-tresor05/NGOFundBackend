@@ -18,6 +18,7 @@ class Grant(models.Model):
 
     class Meta:
         ordering = ["-start_date", "grant_title"]
+        db_table = "grants"
 
     def __str__(self) -> str:
         return self.grant_title
