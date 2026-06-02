@@ -19,7 +19,7 @@ class ReportWorkflowTests(APITestCase):
             email="finance@example.com",
             password="password123",
             full_name="Finance Officer",
-            role="FINANCE_OFFICER",
+            role_id="FINANCE_OFFICER",
         )
         self.client.force_authenticate(self.user)
         donor = Donor.objects.create(
