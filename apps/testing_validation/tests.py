@@ -15,7 +15,7 @@ class TestingValidationWorkflowTests(APITestCase):
             email="executive@example.com",
             password="password123",
             full_name="Executive Director",
-            role="EXECUTIVE_DIRECTOR",
+            role_id="EXECUTIVE_DIRECTOR",
         )
         self.client.force_authenticate(self.user)
 
