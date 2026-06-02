@@ -9,35 +9,54 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from apps.accounts.views import (
     LoginView,
     NotificationViewSet,
+    PermissionViewSet,
     ProfileView,
     RegisterView,
+    RolePermissionViewSet,
+    RoleViewSet,
     SystemSettingViewSet,
     UserViewSet,
 )
 from apps.audit.views import AuditLogViewSet, DocumentViewSet
 from apps.compliance.views import ComplianceItemViewSet
 from apps.donors.views import DonorCommunicationViewSet, DonorViewSet
-from apps.finance.views import ExpenseApprovalViewSet, TransactionViewSet
+from apps.finance.views import (
+    BankAccountViewSet,
+    BankStatementLineViewSet,
+    BankStatementViewSet,
+    ExpenseApprovalViewSet,
+    ReconciliationViewSet,
+    TransactionViewSet,
+)
 from apps.grants.views import GrantViewSet
 from apps.operations.views import ProcessDocumentViewSet, StaffRequirementViewSet
-from apps.projects.views import BudgetLineViewSet, ProjectViewSet, ReallocationRequestViewSet
+from apps.projects.views import BudgetLineViewSet, ProjectMemberViewSet, ProjectViewSet, ReallocationRequestViewSet
 from apps.reports.views import ReportDeliveryViewSet, ReportScheduleViewSet, ReportViewSet
-from apps.requisitions.views import RequisitionViewSet
+from apps.requisitions.views import RequisitionItemViewSet, RequisitionViewSet
 from apps.testing_validation.views import BugReportViewSet, ReleaseNoteViewSet, TestCaseViewSet, UATFeedbackViewSet
 
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="users")
+router.register("roles", RoleViewSet, basename="roles")
+router.register("permissions", PermissionViewSet, basename="permissions")
+router.register("role-permissions", RolePermissionViewSet, basename="role-permissions")
 router.register("system-settings", SystemSettingViewSet, basename="system-settings")
 router.register("notifications", NotificationViewSet, basename="notifications")
 router.register("donors", DonorViewSet, basename="donors")
 router.register("donor-communications", DonorCommunicationViewSet, basename="donor-communications")
 router.register("grants", GrantViewSet, basename="grants")
 router.register("projects", ProjectViewSet, basename="projects")
+router.register("project-members", ProjectMemberViewSet, basename="project-members")
 router.register("budget-lines", BudgetLineViewSet, basename="budget-lines")
 router.register("reallocation-requests", ReallocationRequestViewSet, basename="reallocation-requests")
 router.register("requisitions", RequisitionViewSet, basename="requisitions")
+router.register("requisition-items", RequisitionItemViewSet, basename="requisition-items")
 router.register("expense-approvals", ExpenseApprovalViewSet, basename="expense-approvals")
 router.register("transactions", TransactionViewSet, basename="transactions")
+router.register("bank-accounts", BankAccountViewSet, basename="bank-accounts")
+router.register("bank-statements", BankStatementViewSet, basename="bank-statements")
+router.register("bank-statement-lines", BankStatementLineViewSet, basename="bank-statement-lines")
+router.register("reconciliations", ReconciliationViewSet, basename="reconciliations")
 router.register("reports", ReportViewSet, basename="reports")
 router.register("report-deliveries", ReportDeliveryViewSet, basename="report-deliveries")
 router.register("report-schedules", ReportScheduleViewSet, basename="report-schedules")

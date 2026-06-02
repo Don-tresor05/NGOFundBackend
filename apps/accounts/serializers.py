@@ -2,13 +2,14 @@ from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Notification, PasswordResetRequest, SystemSetting
+from apps.accounts.models import Notification, Permission, PasswordResetRequest, Role, RolePermission, SystemSetting
 
 User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
+    role = serializers.CharField(source="role_id")
 
     class Meta:
         model = User
@@ -47,6 +48,24 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = "__all__"
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = "__all__"
+
+
+class RolePermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolePermission
+        fields = "__all__"
 
 
 class RegisterSerializer(UserSerializer):

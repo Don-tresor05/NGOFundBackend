@@ -2,20 +2,60 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
-class Role(models.TextChoices):
-    SUPER_ADMIN = "SUPER_ADMIN", "Super Administrator"
-    FINANCE_OFFICER = "FINANCE_OFFICER", "Finance Officer"
-    PROJECT_MANAGER = "PROJECT_MANAGER", "Project Manager"
-    EXECUTIVE_DIRECTOR = "EXECUTIVE_DIRECTOR", "Executive Director"
-    FIELD_STAFF = "FIELD_STAFF", "Field Staff"
-    EXTERNAL_AUDITOR = "EXTERNAL_AUDITOR", "External Auditor"
-    DONOR_USER = "DONOR_USER", "Donor User"
+class Role(models.Model):
+    SUPER_ADMIN = "SUPER_ADMIN"
+    FINANCE_OFFICER = "FINANCE_OFFICER"
+    PROJECT_MANAGER = "PROJECT_MANAGER"
+    EXECUTIVE_DIRECTOR = "EXECUTIVE_DIRECTOR"
+    FIELD_STAFF = "FIELD_STAFF"
+    EXTERNAL_AUDITOR = "EXTERNAL_AUDITOR"
+    DONOR_USER = "DONOR_USER"
+
+    role_key = models.CharField(max_length=40, primary_key=True)
+    role_name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["role_name"]
+        db_table = "roles"
+
+    def __str__(self) -> str:
+        return self.role_name
+
+
+class Permission(models.Model):
+    permission_key = models.CharField(max_length=80, unique=True)
+    permission_name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["permission_name"]
+        db_table = "permissions"
+
+    def __str__(self) -> str:
+        return self.permission_name
+
+
+class RolePermission(models.Model):
+    role = models.ForeignKey("accounts.Role", on_delete=models.CASCADE, related_name="role_permissions")
+    permission = models.ForeignKey("accounts.Permission", on_delete=models.CASCADE, related_name="role_permissions")
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "role_permissions"
+        constraints = [
+            models.UniqueConstraint(fields=["role", "permission"], name="unique_role_permission")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.role.role_name} -> {self.permission.permission_name}"
 
 
 class User(AbstractUser):
     full_name = models.CharField(max_length=150)
     email = models.EmailField(unique=True)
-    role = models.CharField(max_length=40, choices=Role.choices)
+    role = models.ForeignKey("accounts.Role", on_delete=models.PROTECT, related_name="users")
     phone = models.CharField(max_length=40, blank=True)
     department = models.CharField(max_length=120, blank=True)
     location = models.CharField(max_length=120, blank=True)
@@ -24,8 +64,15 @@ class User(AbstractUser):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username", "full_name", "role"]
 
+    class Meta:
+        db_table = "users"
+
     def __str__(self) -> str:
-        return f"{self.full_name} ({self.get_role_display()})"
+        return f"{self.full_name} ({self.role_id})"
+
+    @property
+    def role_code(self) -> str:
+        return self.role_id
 
 
 class SystemSetting(models.Model):
@@ -47,6 +94,9 @@ class SystemSetting(models.Model):
     )
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        db_table = "system_settings"
+
     def __str__(self) -> str:
         return self.label
 
@@ -61,6 +111,7 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "notifications"
 
     def __str__(self) -> str:
         return self.title
@@ -76,6 +127,7 @@ class PasswordResetRequest(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "password_reset_requests"
 
     def __str__(self) -> str:
         return f"Password reset for {self.user.email}"

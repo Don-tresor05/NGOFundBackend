@@ -8,15 +8,18 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.models import Notification, PasswordResetRequest, Role, SystemSetting
+from apps.accounts.models import Notification, PasswordResetRequest, Permission, Role, RolePermission, SystemSetting
 from apps.accounts.permissions import IsSuperAdmin, RoleBasedPermission
 from apps.accounts.serializers import (
     LoginSerializer,
     NotificationSerializer,
+    PermissionSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestModelSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
+    RolePermissionSerializer,
+    RoleSerializer,
     SystemSettingSerializer,
     UserSerializer,
 )
@@ -68,12 +71,12 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.order_by("-created_at")
+    queryset = User.objects.select_related("role").order_by("-created_at")
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN]
-    search_fields = ["full_name", "email", "role"]
-    ordering_fields = ["created_at", "full_name", "email", "role"]
+    search_fields = ["full_name", "email", "role__role_name", "role_id"]
+    ordering_fields = ["created_at", "full_name", "email", "role_id"]
 
     @action(detail=False, methods=["get"], url_path="security-summary")
     def security_summary(self, request):
@@ -147,7 +150,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Notification.objects.none()
-        if self.request.user.role == Role.SUPER_ADMIN:
+        if self.request.user.role_id == Role.SUPER_ADMIN:
             return Notification.objects.all()
         return Notification.objects.filter(user=self.request.user)
 
@@ -155,3 +158,27 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request):
         self.get_queryset().update(is_read=True)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    search_fields = ["role_key", "role_name"]
+    ordering_fields = ["role_key", "role_name", "is_active"]
+
+
+class PermissionViewSet(viewsets.ModelViewSet):
+    queryset = Permission.objects.all()
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    search_fields = ["permission_key", "permission_name"]
+    ordering_fields = ["permission_key", "permission_name"]
+
+
+class RolePermissionViewSet(viewsets.ModelViewSet):
+    queryset = RolePermission.objects.select_related("role", "permission")
+    serializer_class = RolePermissionSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    search_fields = ["role__role_name", "permission__permission_name"]
+    ordering_fields = ["granted_at", "role__role_name", "permission__permission_name"]
