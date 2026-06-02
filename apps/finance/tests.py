@@ -21,7 +21,7 @@ class ExpenseApprovalWorkflowTests(APITestCase):
             email="field@example.com",
             password="password123",
             full_name="Field Staff",
-            role="FIELD_STAFF",
+            role_id="FIELD_STAFF",
         )
         self.client.force_authenticate(self.user)
         donor = Donor.objects.create(
@@ -62,4 +62,3 @@ class ExpenseApprovalWorkflowTests(APITestCase):
 
         self.requisition.refresh_from_db()
         self.assertEqual(self.requisition.status, Requisition.Status.APPROVED)
-
