@@ -17,6 +17,7 @@ class Donor(models.Model):
 
     class Meta:
         ordering = ["organization_name"]
+        db_table = "donors"
 
     def __str__(self) -> str:
         return self.organization_name
@@ -32,6 +33,7 @@ class DonorCommunication(models.Model):
 
     class Meta:
         ordering = ["-communication_date"]
+        db_table = "donor_communications"
 
     def __str__(self) -> str:
         return f"{self.channel}: {self.subject}"
