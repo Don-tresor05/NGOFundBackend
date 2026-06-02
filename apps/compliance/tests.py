@@ -15,7 +15,7 @@ class ComplianceWorkflowTests(APITestCase):
             email="auditor@example.com",
             password="password123",
             full_name="External Auditor",
-            role="EXTERNAL_AUDITOR",
+            role_id="EXTERNAL_AUDITOR",
         )
         self.client.force_authenticate(self.user)
 
