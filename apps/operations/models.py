@@ -29,6 +29,7 @@ class StaffRequirement(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "staff_requirements"
 
     def __str__(self) -> str:
         return f"{self.process_area} - {self.interviewee_name}"
@@ -60,6 +61,7 @@ class ProcessDocument(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        db_table = "process_documents"
 
     def __str__(self) -> str:
         return self.title
