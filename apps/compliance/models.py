@@ -16,6 +16,7 @@ class ComplianceItem(models.Model):
 
     class Meta:
         ordering = ["title"]
+        db_table = "compliance_items"
 
     def __str__(self) -> str:
         return self.title
