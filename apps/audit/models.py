@@ -12,6 +12,7 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
+        db_table = "audit_logs"
 
     def __str__(self) -> str:
         return f"{self.action_type} on {self.target_entity_type}:{self.target_entity_id}"
@@ -27,6 +28,7 @@ class Document(models.Model):
 
     class Meta:
         ordering = ["-uploaded_at"]
+        db_table = "documents"
 
     def __str__(self) -> str:
         return f"{self.document_type} for {self.related_entity_type}:{self.related_entity_id}"
