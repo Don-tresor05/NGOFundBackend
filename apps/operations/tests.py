@@ -15,7 +15,7 @@ class StaffRequirementWorkflowTests(APITestCase):
             email="superadmin@example.com",
             password="password123",
             full_name="Super Admin",
-            role="SUPER_ADMIN",
+            role_id="SUPER_ADMIN",
         )
         self.client.force_authenticate(self.user)
 
