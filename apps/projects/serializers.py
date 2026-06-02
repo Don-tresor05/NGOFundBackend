@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.projects.models import BudgetLine, Project, ReallocationRequest
+from apps.projects.models import BudgetLine, Project, ProjectMember, ReallocationRequest
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -33,3 +33,9 @@ class ReallocationRequestSerializer(serializers.ModelSerializer):
         if source and amount and amount > source.remaining_amount:
             raise serializers.ValidationError("Reallocation amount exceeds the source budget line balance.")
         return attrs
+
+
+class ProjectMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectMember
+        fields = "__all__"

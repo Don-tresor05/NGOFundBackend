@@ -16,6 +16,7 @@ class Project(models.Model):
 
     class Meta:
         ordering = ["name"]
+        db_table = "projects"
 
     def __str__(self) -> str:
         return self.name
@@ -29,6 +30,7 @@ class BudgetLine(models.Model):
 
     class Meta:
         ordering = ["line_name"]
+        db_table = "budget_lines"
 
     def __str__(self) -> str:
         return self.line_name
@@ -70,6 +72,29 @@ class ReallocationRequest(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "reallocation_requests"
 
     def __str__(self) -> str:
         return f"Reallocation #{self.pk} - {self.amount}"
+
+
+class ProjectMember(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        INACTIVE = "inactive", "Inactive"
+
+    project = models.ForeignKey("projects.Project", on_delete=models.CASCADE, related_name="members")
+    user = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="project_memberships")
+    member_role = models.CharField(max_length=120)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-assigned_at"]
+        db_table = "project_members"
+        constraints = [
+            models.UniqueConstraint(fields=["project", "user"], name="unique_project_member")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.full_name} on {self.project.name}"

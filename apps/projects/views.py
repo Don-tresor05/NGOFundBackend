@@ -8,8 +8,13 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
-from apps.projects.models import BudgetLine, Project, ReallocationRequest
-from apps.projects.serializers import BudgetLineSerializer, ProjectSerializer, ReallocationRequestSerializer
+from apps.projects.models import BudgetLine, Project, ProjectMember, ReallocationRequest
+from apps.projects.serializers import (
+    BudgetLineSerializer,
+    ProjectMemberSerializer,
+    ProjectSerializer,
+    ReallocationRequestSerializer,
+)
 
 
 class ProjectViewSet(AuditLogMixin, viewsets.ModelViewSet):
@@ -79,3 +84,17 @@ class ReallocationRequestViewSet(AuditLogMixin, viewsets.ModelViewSet):
         request_item.save(update_fields=["status", "reviewed_by", "reviewed_at"])
         self._write_audit_log("REALLOCATION_REJECTED", request_item)
         return Response(self.get_serializer(request_item).data)
+
+
+class ProjectMemberViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = ProjectMember.objects.select_related("project", "user")
+    serializer_class = ProjectMemberSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR]
+    filterset_fields = ["project", "user", "status", "member_role"]
+    search_fields = ["member_role", "project__name", "user__full_name", "user__email"]
+    ordering_fields = ["assigned_at", "status", "member_role"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        self._write_audit_log(self.audit_create_action, instance)
