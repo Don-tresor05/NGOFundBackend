@@ -15,14 +15,14 @@ class AccountSecurityTests(APITestCase):
             email="superadmin@example.com",
             password="password123",
             full_name="Super Admin",
-            role="SUPER_ADMIN",
+            role_id="SUPER_ADMIN",
         )
         self.target = User.objects.create_user(
             username="finance",
             email="finance@example.com",
             password="password123",
             full_name="Finance Officer",
-            role="FINANCE_OFFICER",
+            role_id="FINANCE_OFFICER",
         )
         self.client.force_authenticate(self.admin)
 
@@ -44,4 +44,3 @@ class AccountSecurityTests(APITestCase):
 
         self.target.refresh_from_db()
         self.assertTrue(self.target.check_password("new-password123"))
-

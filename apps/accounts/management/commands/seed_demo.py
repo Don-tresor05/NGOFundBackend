@@ -6,11 +6,11 @@ from apps.accounts.models import Notification, Role, SystemSetting
 from apps.audit.models import AuditLog
 from apps.compliance.models import ComplianceItem
 from apps.donors.models import Donor
-from apps.finance.models import Transaction
+from apps.finance.models import BankAccount, BankStatement, BankStatementLine, Reconciliation, Transaction
 from apps.grants.models import Grant
-from apps.projects.models import BudgetLine, Project
+from apps.projects.models import BudgetLine, Project, ProjectMember
 from apps.reports.models import Report
-from apps.requisitions.models import Requisition
+from apps.requisitions.models import Requisition, RequisitionItem
 
 
 class Command(BaseCommand):
@@ -18,6 +18,17 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         User = get_user_model()
+        for role_key, role_name in [
+            (Role.SUPER_ADMIN, "Super Administrator"),
+            (Role.FINANCE_OFFICER, "Finance Officer"),
+            (Role.PROJECT_MANAGER, "Project Manager"),
+            (Role.EXECUTIVE_DIRECTOR, "Executive Director"),
+            (Role.FIELD_STAFF, "Field Staff"),
+            (Role.EXTERNAL_AUDITOR, "External Auditor"),
+            (Role.DONOR_USER, "Donor User"),
+        ]:
+            Role.objects.get_or_create(role_key=role_key, defaults={"role_name": role_name})
+
         demo_users = [
             ("superadmin@ngofund.org", "Nadine Uwase", Role.SUPER_ADMIN),
             ("finance@ngofund.org", "Michael Finance", Role.FINANCE_OFFICER),
@@ -35,7 +46,7 @@ class Command(BaseCommand):
                 defaults={
                     "username": email,
                     "full_name": full_name,
-                    "role": role,
+                    "role_id": role,
                     "is_staff": role == Role.SUPER_ADMIN,
                     "is_superuser": role == Role.SUPER_ADMIN,
                 },
@@ -140,6 +151,12 @@ class Command(BaseCommand):
             },
         )
 
+        ProjectMember.objects.get_or_create(
+            project=water_project,
+            user=users["manager@ngofund.org"],
+            defaults={"member_role": "Project Lead", "status": ProjectMember.Status.ACTIVE},
+        )
+
         water_budget, _ = BudgetLine.objects.get_or_create(
             grant=health_grant,
             line_name="Water Access",
@@ -169,11 +186,53 @@ class Command(BaseCommand):
             defaults={"amount": 7800, "status": Requisition.Status.APPROVED},
         )
 
+        RequisitionItem.objects.get_or_create(
+            requisition=req1,
+            item_name="Water pump",
+            defaults={"description": "Pump for community water access", "quantity": 1, "unit_cost": 3500},
+        )
+        RequisitionItem.objects.get_or_create(
+            requisition=req1,
+            item_name="PVC fittings",
+            defaults={"description": "Pipe fittings and connectors", "quantity": 18, "unit_cost": 100},
+        )
+
+        bank_account, _ = BankAccount.objects.get_or_create(
+            account_number="000123456789",
+            defaults={
+                "account_name": "RPA Main Operating Account",
+                "bank_name": "Bank of Kigali",
+                "currency": "USD",
+                "is_active": True,
+            },
+        )
+        statement, _ = BankStatement.objects.get_or_create(
+            bank_account=bank_account,
+            statement_number="STMT-2026-05",
+            defaults={
+                "period_start": "2026-05-01",
+                "period_end": "2026-05-31",
+                "opening_balance": 25000,
+                "closing_balance": 32000,
+                "imported_by": users["finance@ngofund.org"],
+            },
+        )
+        statement_line, _ = BankStatementLine.objects.get_or_create(
+            bank_statement=statement,
+            reference_number="BNK-10042",
+            defaults={
+                "transaction_date": "2026-05-22",
+                "description": "Nutrition kit reimbursement",
+                "amount": 7800,
+                "matched": True,
+            },
+        )
         Transaction.objects.get_or_create(
             bank_reference_number="BNK-10042",
             defaults={
                 "requisition": req2,
                 "budget_line": nutrition_budget,
+                "bank_account": bank_account,
                 "processed_by": users["finance@ngofund.org"],
                 "amount": 7800,
                 "transaction_date": "2026-05-22",
@@ -185,10 +244,23 @@ class Command(BaseCommand):
             defaults={
                 "requisition": req1,
                 "budget_line": water_budget,
+                "bank_account": bank_account,
                 "processed_by": users["finance@ngofund.org"],
                 "amount": 4200,
                 "transaction_date": "2026-05-25",
                 "status": Transaction.Status.PENDING,
+            },
+        )
+
+        Reconciliation.objects.get_or_create(
+            transaction=Transaction.objects.get(bank_reference_number="BNK-10042"),
+            bank_statement_line=statement_line,
+            defaults={
+                "reviewed_by": users["finance@ngofund.org"],
+                "status": Reconciliation.Status.MATCHED,
+                "difference_amount": 0,
+                "notes": "Auto-matched from statement import.",
+                "matched_at": timezone.now(),
             },
         )
 

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from apps.accounts.models import Notification, SystemSetting, User
+from apps.accounts.models import Notification, Permission, Role, RolePermission, SystemSetting, User
 
 
 @admin.register(User)
@@ -21,3 +21,6 @@ class CustomUserAdmin(UserAdmin):
 
 admin.site.register(SystemSetting)
 admin.site.register(Notification)
+admin.site.register(Role)
+admin.site.register(Permission)
+admin.site.register(RolePermission)
