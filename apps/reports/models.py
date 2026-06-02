@@ -16,6 +16,7 @@ class Report(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "reports"
 
     def __str__(self) -> str:
         return f"{self.report_type} ({self.format})"
@@ -47,6 +48,7 @@ class ReportSchedule(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "report_schedules"
 
     def __str__(self) -> str:
         return f"{self.report_type} schedule ({self.frequency})"
@@ -68,6 +70,7 @@ class ReportDelivery(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "report_deliveries"
 
     def __str__(self) -> str:
         return f"{self.report.report_type} to {self.destination}"
