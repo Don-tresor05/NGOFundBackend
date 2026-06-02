@@ -25,6 +25,7 @@ class TestCase(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "test_cases"
 
     def __str__(self) -> str:
         return self.title
@@ -45,6 +46,7 @@ class UATFeedback(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "uat_feedback"
 
     def __str__(self) -> str:
         return f"Feedback for {self.test_case_id}"
@@ -83,6 +85,7 @@ class BugReport(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "bug_reports"
 
     def __str__(self) -> str:
         return self.title
@@ -113,6 +116,7 @@ class ReleaseNote(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        db_table = "release_notes"
 
     def __str__(self) -> str:
         return f"{self.version} - {self.title}"
