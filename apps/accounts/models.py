@@ -23,6 +23,9 @@ class Role(models.Model):
     def __str__(self) -> str:
         return self.role_name
 
+    def has_permission(self, permission_key: str) -> bool:
+        return self.role_permissions.filter(permission__permission_key=permission_key).exists()
+
 
 class Permission(models.Model):
     permission_key = models.CharField(max_length=80, unique=True)
@@ -73,6 +76,11 @@ class User(AbstractUser):
     @property
     def role_code(self) -> str:
         return self.role_id
+
+    def has_permission(self, permission_key: str) -> bool:
+        if self.is_superuser or self.role_id == Role.SUPER_ADMIN:
+            return True
+        return self.role.has_permission(permission_key)
 
 
 class SystemSetting(models.Model):
