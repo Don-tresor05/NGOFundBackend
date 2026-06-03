@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.core import mail
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
@@ -52,6 +53,7 @@ class ReportWorkflowTests(APITestCase):
             format="json",
         )
         self.assertEqual(schedule_response.status_code, 201)
+        schedule_id = schedule_response.data["id"]
 
         report = Report.objects.create(
             grant=self.grant,
@@ -59,6 +61,15 @@ class ReportWorkflowTests(APITestCase):
             report_type="Quarterly Finance",
             format="PDF",
         )
+        run_response = self.client.post(reverse("report-schedules-run", args=[schedule_id]))
+        self.assertEqual(run_response.status_code, 200)
+        self.assertEqual(len(run_response.data["deliveries"]), 2)
+        self.assertEqual(len(mail.outbox), 2)
+
+        schedule = ReportSchedule.objects.get(pk=schedule_id)
+        self.assertIsNotNone(schedule.last_run_at)
+        self.assertIsNotNone(schedule.next_run_at)
+
         deliver_response = self.client.post(
             reverse("reports-deliver", args=[report.id]),
             {"destination": "board@example.com", "delivery_method": "email"},
@@ -66,6 +77,11 @@ class ReportWorkflowTests(APITestCase):
         )
         self.assertEqual(deliver_response.status_code, 200)
         self.assertTrue(ReportDelivery.objects.filter(report=report, status=ReportDelivery.Status.SENT).exists())
+
+        dispatch_response = self.client.post(
+            reverse("report-deliveries-dispatch", args=[deliver_response.data["id"]]),
+        )
+        self.assertEqual(dispatch_response.status_code, 200)
 
         deliveries_response = self.client.get(reverse("report-deliveries-list"))
         self.assertEqual(deliveries_response.status_code, 200)
