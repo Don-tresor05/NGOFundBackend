@@ -122,3 +122,22 @@ class PasswordResetRequestModelSerializer(serializers.ModelSerializer):
         model = PasswordResetRequest
         fields = "__all__"
         read_only_fields = ["user", "expires_at", "is_used", "used_at", "created_at"]
+
+
+class NotificationSummarySerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    unread = serializers.IntegerField()
+    read = serializers.IntegerField()
+
+
+class SystemSettingSummarySerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    groups = serializers.DictField(child=serializers.IntegerField())
+    access_timeout_minutes = serializers.IntegerField()
+
+
+class SystemSettingBulkUpdateItemSerializer(serializers.Serializer):
+    setting_key = serializers.CharField()
+    label = serializers.CharField(required=False)
+    setting_value = serializers.CharField()
+    setting_group = serializers.CharField(required=False)
