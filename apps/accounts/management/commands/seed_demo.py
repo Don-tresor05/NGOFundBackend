@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from apps.accounts.models import Notification, Role, SystemSetting
+from apps.accounts.models import Notification, Permission, Role, RolePermission, SystemSetting
 from apps.audit.models import AuditLog
 from apps.compliance.models import ComplianceItem
 from apps.donors.models import Donor
@@ -28,6 +28,75 @@ class Command(BaseCommand):
             (Role.DONOR_USER, "Donor User"),
         ]:
             Role.objects.get_or_create(role_key=role_key, defaults={"role_name": role_name})
+
+        permissions = [
+            ("manage_users", "Manage Users"),
+            ("manage_roles", "Manage Roles"),
+            ("manage_permissions", "Manage Permissions"),
+            ("manage_settings", "Manage Settings"),
+            ("manage_donors", "Manage Donors"),
+            ("manage_projects", "Manage Projects"),
+            ("manage_finance", "Manage Finance"),
+            ("manage_reports", "Manage Reports"),
+            ("manage_operations", "Manage Operations"),
+            ("manage_testing", "Manage Testing"),
+            ("manage_compliance", "Manage Compliance"),
+            ("view_audit_logs", "View Audit Logs"),
+        ]
+        for permission_key, permission_name in permissions:
+            Permission.objects.get_or_create(
+                permission_key=permission_key,
+                defaults={"permission_name": permission_name},
+            )
+
+        role_permissions = {
+            Role.SUPER_ADMIN: [permission_key for permission_key, _ in permissions],
+            Role.FINANCE_OFFICER: [
+                "manage_donors",
+                "manage_projects",
+                "manage_finance",
+                "manage_reports",
+                "view_audit_logs",
+            ],
+            Role.PROJECT_MANAGER: [
+                "manage_donors",
+                "manage_projects",
+                "manage_operations",
+                "manage_testing",
+            ],
+            Role.EXECUTIVE_DIRECTOR: [
+                "manage_donors",
+                "manage_projects",
+                "manage_finance",
+                "manage_reports",
+                "manage_settings",
+                "manage_operations",
+                "manage_testing",
+                "manage_compliance",
+                "view_audit_logs",
+            ],
+            Role.FIELD_STAFF: [
+                "manage_donors",
+                "manage_projects",
+                "manage_operations",
+                "manage_testing",
+            ],
+            Role.EXTERNAL_AUDITOR: [
+                "manage_reports",
+                "manage_compliance",
+                "view_audit_logs",
+            ],
+            Role.DONOR_USER: [
+                "manage_donors",
+                "manage_projects",
+                "manage_reports",
+            ],
+        }
+        for role_key, permission_keys in role_permissions.items():
+            role = Role.objects.get(role_key=role_key)
+            for permission_key in permission_keys:
+                permission = Permission.objects.get(permission_key=permission_key)
+                RolePermission.objects.get_or_create(role=role, permission=permission)
 
         demo_users = [
             ("superadmin@ngofund.org", "Nadine Uwase", Role.SUPER_ADMIN),
