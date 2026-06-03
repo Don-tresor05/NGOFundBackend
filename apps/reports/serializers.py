@@ -16,6 +16,14 @@ class ReportScheduleSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["created_by", "created_at", "last_run_at"]
 
+    def validate_recipient_emails(self, value):
+        recipients = [email.strip() for email in value.split(",") if email.strip()]
+        if not recipients:
+            raise serializers.ValidationError("At least one recipient email is required.")
+        if len(set(recipients)) != len(recipients):
+            raise serializers.ValidationError("Recipient emails must be unique.")
+        return ", ".join(recipients)
+
 
 class ReportDeliverySerializer(serializers.ModelSerializer):
     class Meta:
