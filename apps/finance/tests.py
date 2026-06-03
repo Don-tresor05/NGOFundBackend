@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
 from apps.donors.models import Donor
-from apps.finance.models import ExpenseApproval
+from apps.finance.models import BankAccount, BankStatement, BankStatementLine, ExpenseApproval, Reconciliation, Transaction
 from apps.grants.models import Grant
 from apps.projects.models import BudgetLine
 from apps.requisitions.models import Requisition
@@ -16,14 +16,28 @@ User = get_user_model()
 class ExpenseApprovalWorkflowTests(APITestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(
+        self.field_user = User.objects.create_user(
             username="field-staff",
             email="field@example.com",
             password="password123",
             full_name="Field Staff",
             role_id="FIELD_STAFF",
         )
-        self.client.force_authenticate(self.user)
+        self.finance_user = User.objects.create_user(
+            username="finance-officer",
+            email="finance@example.com",
+            password="password123",
+            full_name="Finance Officer",
+            role_id="FINANCE_OFFICER",
+        )
+        self.executive_user = User.objects.create_user(
+            username="executive-director",
+            email="executive@example.com",
+            password="password123",
+            full_name="Executive Director",
+            role_id="EXECUTIVE_DIRECTOR",
+        )
+        self.client.force_authenticate(self.field_user)
         donor = Donor.objects.create(
             organization_name="Hope Foundation",
             contact_person="Sarah Donor",
@@ -42,13 +56,13 @@ class ExpenseApprovalWorkflowTests(APITestCase):
         )
         self.budget_line = BudgetLine.objects.create(grant=grant, line_name="Maternal Care", allocated_amount=15000, spent_amount=5000)
         self.requisition = Requisition.objects.create(
-            submitted_by=self.user,
+            submitted_by=self.field_user,
             budget_line=self.budget_line,
             amount=2000,
             description="Procure maternal care kits",
         )
 
-    def test_expense_approval_approve_updates_requisition(self):
+    def test_expense_approval_workflow_updates_requisition(self):
         approval = self.client.post(
             reverse("expense-approvals-list"),
             {"requisition": self.requisition.id, "notes": "Initial request submitted."},
@@ -56,9 +70,138 @@ class ExpenseApprovalWorkflowTests(APITestCase):
         )
         self.assertEqual(approval.status_code, 201)
 
+        department_response = self.client.post(reverse("expense-approvals-department-review", args=[approval.data["id"]]))
+        self.assertEqual(department_response.status_code, 200)
+        self.assertEqual(department_response.data["stage"], ExpenseApproval.Stage.DEPARTMENT_REVIEW)
+
+        self.client.force_authenticate(self.finance_user)
+        finance_response = self.client.post(reverse("expense-approvals-finance-review", args=[approval.data["id"]]))
+        self.assertEqual(finance_response.status_code, 200)
+        self.assertEqual(finance_response.data["stage"], ExpenseApproval.Stage.FINANCE_REVIEW)
+
+        self.client.force_authenticate(self.executive_user)
+        executive_response = self.client.post(reverse("expense-approvals-executive-review", args=[approval.data["id"]]))
+        self.assertEqual(executive_response.status_code, 200)
+        self.assertEqual(executive_response.data["stage"], ExpenseApproval.Stage.EXECUTIVE_REVIEW)
+
         approve_response = self.client.post(reverse("expense-approvals-approve", args=[approval.data["id"]]))
         self.assertEqual(approve_response.status_code, 200)
         self.assertEqual(approve_response.data["stage"], ExpenseApproval.Stage.APPROVED)
 
         self.requisition.refresh_from_db()
         self.assertEqual(self.requisition.status, Requisition.Status.APPROVED)
+
+    def test_reconciliation_match_marks_line_and_transaction(self):
+        bank_account = BankAccount.objects.create(
+            account_name="Main Operating Account",
+            bank_name="BPR",
+            account_number="1234567890",
+            currency="USD",
+        )
+        statement = BankStatement.objects.create(
+            bank_account=bank_account,
+            statement_number="ST-001",
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            opening_balance=10000,
+            closing_balance=12000,
+            imported_by=self.finance_user,
+        )
+        line = BankStatementLine.objects.create(
+            bank_statement=statement,
+            transaction_date=date(2026, 5, 15),
+            description="Maternal care disbursement",
+            reference_number="REF-001",
+            amount=2000,
+        )
+        transaction = Transaction.objects.create(
+            requisition=self.requisition,
+            budget_line=self.budget_line,
+            bank_account=bank_account,
+            processed_by=self.finance_user,
+            amount=2000,
+            transaction_date=date(2026, 5, 15),
+            bank_reference_number="REF-001",
+            status=Transaction.Status.CLEARED,
+        )
+
+        self.client.force_authenticate(self.finance_user)
+        reconciliation = self.client.post(
+            reverse("reconciliations-list"),
+            {"transaction": transaction.id, "bank_statement_line": line.id},
+            format="json",
+        )
+        self.assertEqual(reconciliation.status_code, 201)
+
+        match_response = self.client.post(reverse("reconciliations-match", args=[reconciliation.data["id"]]))
+        self.assertEqual(match_response.status_code, 200)
+        self.assertEqual(match_response.data["status"], Reconciliation.Status.MATCHED)
+
+        transaction.refresh_from_db()
+        line.refresh_from_db()
+        self.assertEqual(transaction.status, Transaction.Status.RECONCILED)
+        self.assertTrue(line.matched)
+
+    def test_bank_statement_import_and_auto_match(self):
+        bank_account = BankAccount.objects.create(
+            account_name="Main Operating Account",
+            bank_name="BPR",
+            account_number="1234500000",
+            currency="USD",
+        )
+        statement = BankStatement.objects.create(
+            bank_account=bank_account,
+            statement_number="TMP-001",
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            opening_balance=10000,
+            closing_balance=12000,
+            imported_by=self.finance_user,
+        )
+        self.client.force_authenticate(self.finance_user)
+        import_response = self.client.post(
+            reverse("bank-statements-import-lines", args=[statement.pk]),
+            {
+                "statement_number": "ST-002",
+                "period_start": "2026-05-01",
+                "period_end": "2026-05-31",
+                "opening_balance": "10000.00",
+                "closing_balance": "12000.00",
+                "lines": [
+                    {
+                        "transaction_date": "2026-05-15",
+                        "description": "Maternal care disbursement",
+                        "reference_number": "REF-AUTO-1",
+                        "amount": "2000.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(import_response.status_code, 201)
+        line_id = import_response.data["lines"][0]["id"]
+
+        transaction = Transaction.objects.create(
+            requisition=self.requisition,
+            budget_line=self.budget_line,
+            bank_account=bank_account,
+            processed_by=self.finance_user,
+            amount=2000,
+            transaction_date=date(2026, 5, 15),
+            bank_reference_number="REF-AUTO-1",
+            status=Transaction.Status.CLEARED,
+        )
+
+        auto_match_response = self.client.post(
+            reverse("reconciliations-auto-match"),
+            {"bank_statement": statement.pk},
+            format="json",
+        )
+        self.assertEqual(auto_match_response.status_code, 200)
+        self.assertEqual(auto_match_response.data["matched"], 1)
+
+        statement.refresh_from_db()
+        line = BankStatementLine.objects.get(pk=line_id)
+        transaction.refresh_from_db()
+        self.assertTrue(line.matched)
+        self.assertEqual(transaction.status, Transaction.Status.RECONCILED)
