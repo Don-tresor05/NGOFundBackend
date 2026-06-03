@@ -12,3 +12,4 @@ PASSWORD_HASHERS = [
 ]
 
 MEDIA_ROOT = BASE_DIR / "test-media"
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
