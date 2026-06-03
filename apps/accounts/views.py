@@ -2,7 +2,9 @@ from datetime import timedelta
 import secrets
 
 from django.contrib.auth import get_user_model
+from django.db.models import Count
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -13,6 +15,7 @@ from apps.accounts.permissions import IsSuperAdmin, RoleBasedPermission
 from apps.accounts.serializers import (
     LoginSerializer,
     NotificationSerializer,
+    NotificationSummarySerializer,
     PermissionSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestModelSerializer,
@@ -21,6 +24,8 @@ from apps.accounts.serializers import (
     RolePermissionSerializer,
     RoleSerializer,
     SystemSettingSerializer,
+    SystemSettingBulkUpdateItemSerializer,
+    SystemSettingSummarySerializer,
     UserSerializer,
 )
 
@@ -75,6 +80,7 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN]
+    required_permissions = ["manage_users"]
     search_fields = ["full_name", "email", "role__role_name", "role_id"]
     ordering_fields = ["created_at", "full_name", "email", "role_id"]
 
@@ -130,7 +136,9 @@ class UserViewSet(viewsets.ModelViewSet):
 class SystemSettingViewSet(viewsets.ModelViewSet):
     queryset = SystemSetting.objects.order_by("setting_group", "label")
     serializer_class = SystemSettingSerializer
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.SUPER_ADMIN]
+    required_permissions = ["manage_settings"]
     search_fields = ["setting_key", "label", "setting_group"]
 
     def perform_create(self, serializer):
@@ -138,6 +146,42 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
+
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request):
+        qs = self.get_queryset()
+        groups = {
+            row["setting_group"]: row["total"]
+            for row in qs.values("setting_group").annotate(total=Count("id")).order_by("setting_group")
+        }
+        access_timeout = qs.filter(setting_key="session_timeout_minutes").first()
+        return Response(
+            SystemSettingSummarySerializer(
+                {
+                    "total": qs.count(),
+                    "groups": groups,
+                    "access_timeout_minutes": int(access_timeout.setting_value) if access_timeout else 60,
+                }
+            ).data
+        )
+
+    @action(detail=False, methods=["post"], url_path="bulk-update")
+    def bulk_update(self, request):
+        serializer = SystemSettingBulkUpdateItemSerializer(data=request.data, many=True)
+        serializer.is_valid(raise_exception=True)
+        updated = []
+        for item in serializer.validated_data:
+            obj, _ = SystemSetting.objects.update_or_create(
+                setting_key=item["setting_key"],
+                defaults={
+                    "label": item.get("label", item["setting_key"].replace("_", " ").title()),
+                    "setting_value": item["setting_value"],
+                    "setting_group": item.get("setting_group", SystemSetting.SettingGroup.ACCESS),
+                    "updated_by": request.user,
+                },
+            )
+            updated.append(obj)
+        return Response(self.get_serializer(updated, many=True).data)
 
 
 class NotificationViewSet(viewsets.ModelViewSet):
@@ -159,11 +203,40 @@ class NotificationViewSet(viewsets.ModelViewSet):
         self.get_queryset().update(is_read=True)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=["post"], url_path="mark-read")
+    def mark_read(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save(update_fields=["is_read"])
+        return Response(self.get_serializer(notification).data)
+
+    @action(detail=True, methods=["post"], url_path="mark-unread")
+    def mark_unread(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = False
+        notification.save(update_fields=["is_read"])
+        return Response(self.get_serializer(notification).data)
+
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request):
+        qs = self.get_queryset()
+        return Response(
+            NotificationSummarySerializer(
+                {
+                    "total": qs.count(),
+                    "unread": qs.filter(is_read=False).count(),
+                    "read": qs.filter(is_read=True).count(),
+                }
+            ).data
+        )
+
 
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.SUPER_ADMIN]
+    required_permissions = ["manage_roles"]
     search_fields = ["role_key", "role_name"]
     ordering_fields = ["role_key", "role_name", "is_active"]
 
@@ -171,7 +244,9 @@ class RoleViewSet(viewsets.ModelViewSet):
 class PermissionViewSet(viewsets.ModelViewSet):
     queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.SUPER_ADMIN]
+    required_permissions = ["manage_permissions"]
     search_fields = ["permission_key", "permission_name"]
     ordering_fields = ["permission_key", "permission_name"]
 
@@ -179,6 +254,8 @@ class PermissionViewSet(viewsets.ModelViewSet):
 class RolePermissionViewSet(viewsets.ModelViewSet):
     queryset = RolePermission.objects.select_related("role", "permission")
     serializer_class = RolePermissionSerializer
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.SUPER_ADMIN]
+    required_permissions = ["manage_permissions"]
     search_fields = ["role__role_name", "permission__permission_name"]
     ordering_fields = ["granted_at", "role__role_name", "permission__permission_name"]
