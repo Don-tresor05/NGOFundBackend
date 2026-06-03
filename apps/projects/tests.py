@@ -6,7 +6,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from apps.donors.models import Donor
 from apps.grants.models import Grant
-from apps.projects.models import BudgetLine
+from apps.projects.models import BudgetLine, Project
 
 User = get_user_model()
 
@@ -61,3 +61,24 @@ class ReallocationWorkflowTests(APITestCase):
         self.target.refresh_from_db()
         self.assertEqual(str(self.source.allocated_amount), "17000.00")
         self.assertEqual(str(self.target.allocated_amount), "13000.00")
+
+    def test_project_lifecycle_transitions(self):
+        project = Project.objects.create(
+            grant=self.grant,
+            name="Community Clinic Upgrade",
+            description="Upgrade the clinic infrastructure.",
+            start_date=date(2026, 2, 1),
+            end_date=date(2026, 10, 31),
+        )
+
+        activate_response = self.client.post(reverse("projects-activate", args=[project.pk]))
+        self.assertEqual(activate_response.status_code, 200)
+        self.assertEqual(activate_response.data["status"], Project.Status.ACTIVE)
+
+        complete_response = self.client.post(reverse("projects-complete", args=[project.pk]))
+        self.assertEqual(complete_response.status_code, 200)
+        self.assertEqual(complete_response.data["status"], Project.Status.COMPLETED)
+
+        reopen_response = self.client.post(reverse("projects-reopen", args=[project.pk]))
+        self.assertEqual(reopen_response.status_code, 200)
+        self.assertEqual(reopen_response.data["status"], Project.Status.ACTIVE)
