@@ -16,6 +16,7 @@ class ComplianceItemViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = ComplianceItemSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.EXTERNAL_AUDITOR, Role.EXECUTIVE_DIRECTOR, Role.FINANCE_OFFICER]
+    required_permissions = ["manage_compliance"]
     filterset_fields = ["verified", "owner", "verified_by"]
     search_fields = ["title", "owner"]
     ordering_fields = ["title", "verified_at"]
