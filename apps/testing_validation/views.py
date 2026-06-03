@@ -16,6 +16,7 @@ class TestCaseViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = TestCaseSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN, Role.EXTERNAL_AUDITOR, Role.EXECUTIVE_DIRECTOR]
+    required_permissions = ["manage_testing"]
     filterset_fields = ["created_by", "environment", "status", "priority"]
     search_fields = ["title", "scenario", "environment"]
     ordering_fields = ["created_at", "status", "priority"]
@@ -62,6 +63,7 @@ class UATFeedbackViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = UATFeedbackSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN, Role.EXTERNAL_AUDITOR, Role.EXECUTIVE_DIRECTOR]
+    required_permissions = ["manage_testing"]
     filterset_fields = ["test_case", "submitted_by", "status"]
     search_fields = ["feedback", "test_case__title"]
     ordering_fields = ["created_at", "status"]
@@ -92,6 +94,7 @@ class BugReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = BugReportSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN, Role.EXTERNAL_AUDITOR, Role.EXECUTIVE_DIRECTOR, Role.PROJECT_MANAGER]
+    required_permissions = ["manage_testing"]
     filterset_fields = ["reported_by", "assigned_to", "status", "severity", "environment"]
     search_fields = ["title", "description", "reproduction_steps", "environment"]
     ordering_fields = ["created_at", "resolved_at", "status", "severity"]
@@ -143,6 +146,7 @@ class ReleaseNoteViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = ReleaseNoteSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR]
+    required_permissions = ["manage_testing"]
     filterset_fields = ["created_by", "published_by", "status", "environment", "version"]
     search_fields = ["title", "summary", "changelog", "version"]
     ordering_fields = ["created_at", "published_at", "version", "status"]
