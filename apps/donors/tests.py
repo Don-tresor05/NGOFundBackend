@@ -38,3 +38,14 @@ class DonorEngagementTests(APITestCase):
         )
         self.assertEqual(response.status_code, 201)
         self.assertTrue(DonorCommunication.objects.filter(donor_id=self.donor["id"]).exists())
+
+    def test_engagement_dashboard_returns_summary(self):
+        self.client.post(
+            reverse("donors-acknowledge", args=[self.donor["id"]]),
+            {"channel": "email"},
+            format="json",
+        )
+        response = self.client.get(reverse("donors-engagement-dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["total_donors"], 1)
+        self.assertGreaterEqual(response.data["total_communications"], 1)
