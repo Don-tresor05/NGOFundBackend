@@ -9,13 +9,23 @@ class IsSuperAdmin(BasePermission):
 
 
 class RoleBasedPermission(BasePermission):
-    """Checks view.allowed_roles or view.action_roles when present."""
+    """Checks view.required_permissions, view.allowed_roles, or action-scoped variants when present."""
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         if request.user.is_superuser or request.user.role_id == Role.SUPER_ADMIN:
             return True
+
+        action_permissions = getattr(view, "action_permissions", {})
+        required_permissions = action_permissions.get(
+            getattr(view, "action", None),
+            getattr(view, "required_permissions", None),
+        )
+        if required_permissions:
+            if isinstance(required_permissions, str):
+                required_permissions = [required_permissions]
+            return any(request.user.has_permission(permission_key) for permission_key in required_permissions)
 
         action_roles = getattr(view, "action_roles", {})
         allowed_roles = action_roles.get(getattr(view, "action", None), getattr(view, "allowed_roles", None))
