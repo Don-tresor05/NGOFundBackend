@@ -130,3 +130,5 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Funding management and operations API for Rwanda Paediatric Association.",
     "VERSION": "1.0.0",
 }
+
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@ngofund.local")
