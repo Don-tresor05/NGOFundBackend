@@ -73,6 +73,19 @@ class StaffRequirementWorkflowTests(APITestCase):
             created_by=self.user,
         )
 
+        submit_response = self.client.post(reverse("process-documents-submit-for-review", args=[document.pk]))
+        self.assertEqual(submit_response.status_code, 200)
+        self.assertEqual(submit_response.data["status"], ProcessDocument.Status.IN_REVIEW)
+
+        approve_response = self.client.post(reverse("process-documents-approve", args=[document.pk]))
+        self.assertEqual(approve_response.status_code, 200)
+        self.assertEqual(approve_response.data["status"], ProcessDocument.Status.APPROVED)
+
         publish_response = self.client.post(reverse("process-documents-publish", args=[document.pk]))
         self.assertEqual(publish_response.status_code, 200)
         self.assertEqual(publish_response.data["status"], ProcessDocument.Status.PUBLISHED)
+
+        revise_response = self.client.post(reverse("process-documents-revise", args=[document.pk]))
+        self.assertEqual(revise_response.status_code, 201)
+        self.assertEqual(revise_response.data["status"], ProcessDocument.Status.DRAFT)
+        self.assertEqual(revise_response.data["version"], "v2")
