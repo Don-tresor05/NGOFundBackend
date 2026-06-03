@@ -13,6 +13,7 @@ class AuditLogViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = AuditLogSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.FINANCE_OFFICER, Role.EXTERNAL_AUDITOR, Role.EXECUTIVE_DIRECTOR]
+    required_permissions = ["view_audit_logs"]
     filterset_fields = ["user", "action_type", "target_entity_type"]
     search_fields = ["action_type", "target_entity_type", "details", "ip_address"]
     ordering_fields = ["timestamp", "action_type"]
@@ -23,6 +24,7 @@ class DocumentViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.FINANCE_OFFICER, Role.EXTERNAL_AUDITOR, Role.EXECUTIVE_DIRECTOR, Role.FIELD_STAFF]
+    required_permissions = ["manage_operations", "manage_finance"]
     filterset_fields = ["uploaded_by", "related_entity_type", "document_type"]
     search_fields = ["related_entity_type", "document_type"]
     ordering_fields = ["uploaded_at", "document_type"]
