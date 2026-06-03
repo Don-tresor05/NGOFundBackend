@@ -1,7 +1,10 @@
+import re
+
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.accounts.models import Role
@@ -16,6 +19,7 @@ class StaffRequirementViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = StaffRequirementSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN, Role.FIELD_STAFF, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR]
+    required_permissions = ["manage_operations"]
     filterset_fields = ["captured_by", "validation_status", "process_area"]
     search_fields = ["interviewee_name", "process_area", "feedback"]
     ordering_fields = ["created_at", "validation_status"]
@@ -58,6 +62,14 @@ class ProcessDocumentViewSet(AuditLogMixin, viewsets.ModelViewSet):
     serializer_class = ProcessDocumentSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN, Role.FIELD_STAFF, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR]
+    required_permissions = ["manage_operations"]
+    action_roles = {
+        "submit_for_review": [Role.SUPER_ADMIN, Role.FIELD_STAFF, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR],
+        "approve": [Role.SUPER_ADMIN, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR],
+        "publish": [Role.SUPER_ADMIN, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR],
+        "reject": [Role.SUPER_ADMIN, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR],
+        "revise": [Role.SUPER_ADMIN, Role.FIELD_STAFF, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR],
+    }
     filterset_fields = ["created_by", "approved_by", "status"]
     search_fields = ["title", "summary", "content", "version"]
     ordering_fields = ["created_at", "updated_at", "status", "version"]
@@ -66,9 +78,17 @@ class ProcessDocumentViewSet(AuditLogMixin, viewsets.ModelViewSet):
         instance = serializer.save(created_by=self.request.user)
         self._write_audit_log(self.audit_create_action, instance)
 
+    def _next_version(self, version):
+        match = re.fullmatch(r"[vV](\d+)", version.strip())
+        if match:
+            return f"v{int(match.group(1)) + 1}"
+        return f"{version}-r2"
+
     @action(detail=True, methods=["post"], url_path="submit-for-review")
     def submit_for_review(self, request, pk=None):
         document = self.get_object()
+        if document.status not in {ProcessDocument.Status.DRAFT, ProcessDocument.Status.REJECTED}:
+            raise ValidationError("Only draft or rejected documents can be submitted for review.")
         document.status = ProcessDocument.Status.IN_REVIEW
         document.save(update_fields=["status"])
         self._write_audit_log("PROCESS_DOCUMENT_SUBMITTED", document)
@@ -77,6 +97,8 @@ class ProcessDocumentViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
         document = self.get_object()
+        if document.status != ProcessDocument.Status.IN_REVIEW:
+            raise ValidationError("Only documents in review can be approved.")
         document.status = ProcessDocument.Status.APPROVED
         document.approved_by = request.user
         document.save(update_fields=["status", "approved_by"])
@@ -86,6 +108,8 @@ class ProcessDocumentViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="publish")
     def publish(self, request, pk=None):
         document = self.get_object()
+        if document.status != ProcessDocument.Status.APPROVED:
+            raise ValidationError("Only approved documents can be published.")
         document.status = ProcessDocument.Status.PUBLISHED
         document.approved_by = request.user
         document.save(update_fields=["status", "approved_by"])
@@ -95,7 +119,23 @@ class ProcessDocumentViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, pk=None):
         document = self.get_object()
+        if document.status == ProcessDocument.Status.PUBLISHED:
+            raise ValidationError("Published documents cannot be rejected.")
         document.status = ProcessDocument.Status.REJECTED
         document.save(update_fields=["status"])
         self._write_audit_log("PROCESS_DOCUMENT_REJECTED", document)
         return Response(self.get_serializer(document).data)
+
+    @action(detail=True, methods=["post"], url_path="revise")
+    def revise(self, request, pk=None):
+        document = self.get_object()
+        revised = ProcessDocument.objects.create(
+            title=request.data.get("title", document.title),
+            version=request.data.get("version", self._next_version(document.version)),
+            summary=request.data.get("summary", document.summary),
+            content=request.data.get("content", document.content),
+            created_by=request.user,
+            status=ProcessDocument.Status.DRAFT,
+        )
+        self._write_audit_log("PROCESS_DOCUMENT_REVISED", revised)
+        return Response(self.get_serializer(revised).data, status=201)
