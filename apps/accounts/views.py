@@ -3,6 +3,7 @@ import secrets
 
 from django.contrib.auth import get_user_model
 from django.db.models import Count
+from django.conf import settings
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework import generics, status, viewsets
@@ -101,16 +102,19 @@ class UserViewSet(viewsets.ModelViewSet):
     def password_reset_request(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            user = User.objects.get(email=serializer.validated_data["email"])
-        except User.DoesNotExist:
-            return Response({"detail": "No account exists for that email address."}, status=status.HTTP_404_NOT_FOUND)
-        reset_request = PasswordResetRequest.objects.create(
-            user=user,
-            token=secrets.token_hex(32),
-            expires_at=timezone.now() + timedelta(hours=2),
-        )
-        return Response(PasswordResetRequestModelSerializer(reset_request).data, status=status.HTTP_201_CREATED)
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email=email).first()
+        if user:
+            reset_request = PasswordResetRequest.objects.create(
+                user=user,
+                token=secrets.token_hex(32),
+                expires_at=timezone.now() + timedelta(hours=2),
+            )
+            payload = {"detail": "If the account exists, a password reset token has been issued."}
+            if settings.DEBUG:
+                payload["token"] = reset_request.token
+            return Response(payload, status=status.HTTP_200_OK)
+        return Response({"detail": "If the account exists, a password reset token has been issued."}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], url_path="password-reset-confirm")
     def password_reset_confirm(self, request):
