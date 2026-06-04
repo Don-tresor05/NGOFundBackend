@@ -32,7 +32,11 @@ class AccountSecurityTests(APITestCase):
             {"email": self.target.email},
             format="json",
         )
-        self.assertEqual(request_response.status_code, 201)
+        self.assertEqual(request_response.status_code, 200)
+        self.assertEqual(
+            request_response.data["detail"],
+            "If the account exists, a password reset token has been issued.",
+        )
 
         reset_request = PasswordResetRequest.objects.latest("created_at")
         confirm_response = self.client.post(
