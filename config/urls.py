@@ -14,6 +14,8 @@ from apps.accounts.views import (
     RegisterView,
     RolePermissionViewSet,
     RoleViewSet,
+    SignupOtpResendView,
+    SignupOtpVerifyView,
     SystemSettingViewSet,
     UserViewSet,
 )
@@ -74,6 +76,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/login/", LoginView.as_view(), name="login"),
     path("api/auth/register/", RegisterView.as_view(), name="register"),
+    path("api/auth/signup/verify-otp/", SignupOtpVerifyView.as_view(), name="signup_verify_otp"),
+    path("api/auth/signup/resend-otp/", SignupOtpResendView.as_view(), name="signup_resend_otp"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/profile/", ProfileView.as_view(), name="profile"),
     path("api/", include(router.urls)),
