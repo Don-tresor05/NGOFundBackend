@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from apps.accounts.models import Notification, Permission, Role, RolePermission, SystemSetting, User
+from apps.accounts.models import Notification, Permission, Role, RolePermission, SignupOtp, SystemSetting, User
 
 
 @admin.register(User)
@@ -24,3 +24,4 @@ admin.site.register(Notification)
 admin.site.register(Role)
 admin.site.register(Permission)
 admin.site.register(RolePermission)
+admin.site.register(SignupOtp)
