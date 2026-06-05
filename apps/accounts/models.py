@@ -139,3 +139,19 @@ class PasswordResetRequest(models.Model):
 
     def __str__(self) -> str:
         return f"Password reset for {self.user.email}"
+
+
+class SignupOtp(models.Model):
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="signup_otps")
+    otp = models.CharField(max_length=6)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        db_table = "signup_otps"
+
+    def __str__(self) -> str:
+        return f"Signup OTP for {self.user.email}"
