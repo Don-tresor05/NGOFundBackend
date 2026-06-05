@@ -2,6 +2,7 @@ from datetime import timedelta
 import secrets
 
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
 from django.db.models import Count
 from django.conf import settings
 from django.utils import timezone
@@ -10,8 +11,9 @@ from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Notification, PasswordResetRequest, Permission, Role, RolePermission, SystemSetting
+from apps.accounts.models import Notification, PasswordResetRequest, Permission, Role, RolePermission, SignupOtp, SystemSetting
 from apps.accounts.permissions import IsSuperAdmin, RoleBasedPermission
 from apps.accounts.serializers import (
     LoginSerializer,
@@ -21,6 +23,9 @@ from apps.accounts.serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestModelSerializer,
     PasswordResetRequestSerializer,
+    SignupOtpResponseSerializer,
+    SignupOtpResendSerializer,
+    SignupOtpVerifySerializer,
     RegisterSerializer,
     RolePermissionSerializer,
     RoleSerializer,
@@ -31,6 +36,28 @@ from apps.accounts.serializers import (
 )
 
 User = get_user_model()
+
+
+def issue_signup_otp(user):
+    otp = f"{secrets.randbelow(900000) + 100000}"
+    signup_otp = SignupOtp.objects.create(
+        user=user,
+        otp=otp,
+        expires_at=timezone.now() + timedelta(minutes=15),
+    )
+    send_mail(
+        subject="Your NGO Fund Platform verification code",
+        message=(
+            f"Hello {user.full_name},\n\n"
+            f"Your NGO Fund Platform verification code is {otp}.\n"
+            "It expires in 15 minutes.\n\n"
+            "If you did not request this account, you can ignore this email."
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=not settings.DEBUG,
+    )
+    return signup_otp
 
 
 class LoginView(generics.GenericAPIView):
@@ -56,16 +83,111 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
 
     def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
-        user = User.objects.get(id=response.data["id"])
-        login_serializer = LoginSerializer(
-            data={"email": user.email, "password": request.data.get("password")},
-            context={"request": request},
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+        email = validated_data["email"].lower()
+
+        existing_user = User.objects.filter(email__iexact=email).first()
+        if existing_user and existing_user.is_active:
+            return Response(
+                {
+                    "detail": "An active account with this email already exists. Sign in or reset the password instead.",
+                    "email": email,
+                    "conflict": True,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        if existing_user:
+            user = existing_user
+            user.full_name = validated_data["full_name"]
+            user.email = email
+            user.username = validated_data.get("username") or email
+            user.role_id = validated_data["role_id"]
+            user.phone = validated_data.get("phone", "")
+            user.department = validated_data.get("department", "")
+            user.location = validated_data.get("location", "")
+            user.is_active = False
+            user.set_password(validated_data["password"])
+            user.save()
+            user.signup_otps.all().update(is_used=True, used_at=timezone.now())
+        else:
+            user = serializer.save()
+            user.is_active = False
+            user.save(update_fields=["is_active"])
+
+        issue_signup_otp(user)
+        payload = SignupOtpResponseSerializer(
+            {
+                "detail": "A verification code has been sent to the registered email address. Verify the account to continue.",
+                "email": user.email,
+                "verification_required": True,
+                "expires_in_minutes": 15,
+            }
+        ).data
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class SignupOtpVerifyView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = SignupOtpVerifySerializer
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].lower()
+        otp_value = serializer.validated_data["otp"]
+
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            raise ValidationError({"email": "No account is waiting for verification for this email."})
+
+        otp_record = (
+            SignupOtp.objects.select_related("user")
+            .filter(user=user, otp=otp_value, is_used=False, expires_at__gte=timezone.now())
+            .first()
         )
-        login_serializer.is_valid(raise_exception=True)
-        response.data["access"] = login_serializer.validated_data["access"]
-        response.data["refresh"] = login_serializer.validated_data["refresh"]
-        return response
+        if not otp_record:
+            return Response({"detail": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp_record.is_used = True
+        otp_record.used_at = timezone.now()
+        otp_record.save(update_fields=["is_used", "used_at"])
+
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "detail": "Account verified successfully.",
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": UserSerializer(user).data,
+            }
+        )
+
+
+class SignupOtpResendView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = SignupOtpResendSerializer
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].lower()
+
+        user = User.objects.filter(email__iexact=email).first()
+        if not user or user.is_active:
+            return Response(
+                {"detail": "If the account is pending verification, a new verification code has been issued."},
+                status=status.HTTP_200_OK,
+            )
+
+        user.signup_otps.all().update(is_used=True, used_at=timezone.now())
+        issue_signup_otp(user)
+        return Response({"detail": "If the account is pending verification, a new verification code has been issued."}, status=status.HTTP_200_OK)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
