@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Notification, Permission, PasswordResetRequest, Role, RolePermission, SystemSetting
+from apps.accounts.models import Notification, Permission, PasswordResetRequest, Role, RolePermission, SignupOtp, SystemSetting
 
 User = get_user_model()
 
@@ -69,7 +69,15 @@ class RolePermissionSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(UserSerializer):
+    email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
+
+    class Meta(UserSerializer.Meta):
+        extra_kwargs = {**UserSerializer.Meta.extra_kwargs, "email": {"validators": []}}
+
+    def create(self, validated_data):
+        validated_data["is_active"] = False
+        return super().create(validated_data)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -85,7 +93,7 @@ class LoginSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError("Invalid email or password.")
         if not user.is_active:
-            raise serializers.ValidationError("This account is inactive.")
+            raise serializers.ValidationError("This account is inactive. Complete OTP verification to continue.")
 
         refresh = RefreshToken.for_user(user)
         attrs["user"] = user
@@ -115,6 +123,29 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 class PasswordResetConfirmSerializer(serializers.Serializer):
     token = serializers.CharField()
     new_password = serializers.CharField(min_length=8, write_only=True)
+
+
+class SignupOtpVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(min_length=6, max_length=6)
+
+
+class SignupOtpResendSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class SignupOtpResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+    email = serializers.EmailField()
+    verification_required = serializers.BooleanField()
+    expires_in_minutes = serializers.IntegerField()
+
+
+class SignupOtpRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SignupOtp
+        fields = "__all__"
+        read_only_fields = ["user", "expires_at", "is_used", "used_at", "created_at"]
 
 
 class PasswordResetRequestModelSerializer(serializers.ModelSerializer):
