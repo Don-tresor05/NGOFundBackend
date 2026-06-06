@@ -144,6 +144,7 @@ class PasswordResetRequest(models.Model):
 class SignupOtp(models.Model):
     user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="signup_otps")
     otp = models.CharField(max_length=6)
+    verification_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
     used_at = models.DateTimeField(null=True, blank=True)
