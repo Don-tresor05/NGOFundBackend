@@ -40,16 +40,21 @@ User = get_user_model()
 
 def issue_signup_otp(user):
     otp = f"{secrets.randbelow(900000) + 100000}"
+    verification_token = secrets.token_hex(32)
     signup_otp = SignupOtp.objects.create(
         user=user,
         otp=otp,
+        verification_token=verification_token,
         expires_at=timezone.now() + timedelta(minutes=15),
     )
+    verification_link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/verify-account?token={verification_token}"
     send_mail(
         subject="Your NGO Fund Platform verification code",
         message=(
             f"Hello {user.full_name},\n\n"
-            f"Your NGO Fund Platform verification code is {otp}.\n"
+            "Use the link below to verify your account:\n"
+            f"{verification_link}\n\n"
+            f"Or enter this verification code manually: {otp}\n"
             "It expires in 15 minutes.\n\n"
             "If you did not request this account, you can ignore this email."
         ),
@@ -120,7 +125,7 @@ class RegisterView(generics.CreateAPIView):
         issue_signup_otp(user)
         payload = SignupOtpResponseSerializer(
             {
-                "detail": "A verification code has been sent to the registered email address. Verify the account to continue.",
+                "detail": "A verification link and verification code have been sent to the registered email address.",
                 "email": user.email,
                 "verification_required": True,
                 "expires_in_minutes": 15,
@@ -136,18 +141,28 @@ class SignupOtpVerifyView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data["email"].lower()
-        otp_value = serializer.validated_data["otp"]
+        token_value = serializer.validated_data.get("token")
+        if token_value:
+            otp_record = (
+                SignupOtp.objects.select_related("user")
+                .filter(verification_token=token_value, is_used=False, expires_at__gte=timezone.now())
+                .first()
+            )
+            if not otp_record:
+                return Response({"detail": "Invalid or expired verification link."}, status=status.HTTP_400_BAD_REQUEST)
+            user = otp_record.user
+        else:
+            email = serializer.validated_data["email"].lower()
+            otp_value = serializer.validated_data["otp"]
+            user = User.objects.filter(email__iexact=email).first()
+            if not user:
+                raise ValidationError({"email": "No account is waiting for verification for this email."})
 
-        user = User.objects.filter(email__iexact=email).first()
-        if not user:
-            raise ValidationError({"email": "No account is waiting for verification for this email."})
-
-        otp_record = (
-            SignupOtp.objects.select_related("user")
-            .filter(user=user, otp=otp_value, is_used=False, expires_at__gte=timezone.now())
-            .first()
-        )
+            otp_record = (
+                SignupOtp.objects.select_related("user")
+                .filter(user=user, otp=otp_value, is_used=False, expires_at__gte=timezone.now())
+                .first()
+            )
         if not otp_record:
             return Response({"detail": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
 

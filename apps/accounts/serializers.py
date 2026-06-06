@@ -126,8 +126,22 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 
 class SignupOtpVerifySerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(min_length=6, max_length=6)
+    email = serializers.EmailField(required=False)
+    otp = serializers.CharField(min_length=6, max_length=6, required=False)
+    token = serializers.CharField(required=False)
+
+    def validate(self, attrs):
+        otp = attrs.get("otp")
+        token = attrs.get("token")
+        email = attrs.get("email")
+
+        if token:
+            return attrs
+
+        if not email or not otp:
+            raise serializers.ValidationError("Provide either a verification token or an email and verification code.")
+
+        return attrs
 
 
 class SignupOtpResendSerializer(serializers.Serializer):
