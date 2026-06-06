@@ -142,6 +142,37 @@ class AccountSecurityTests(APITestCase):
         created_user.refresh_from_db()
         self.assertTrue(created_user.is_active)
 
+    def test_signup_otp_link_verification_activates_account(self):
+        signup_response = self.client.post(
+            reverse("register"),
+            {
+                "full_name": "Link User",
+                "email": "link.user@example.com",
+                "password": "password123",
+                "role": "DONOR_USER",
+                "phone": "+250700000005",
+                "location": "Kigali",
+                "department": "Donor",
+            },
+            format="json",
+        )
+        self.assertEqual(signup_response.status_code, 201)
+
+        created_user = User.objects.get(email="link.user@example.com")
+        verification_token = SignupOtp.objects.filter(user=created_user).latest("created_at").verification_token
+
+        verify_response = self.client.post(
+            reverse("signup_verify_otp"),
+            {"token": verification_token},
+            format="json",
+        )
+        self.assertEqual(verify_response.status_code, 200)
+        self.assertIn("access", verify_response.data)
+        self.assertIn("refresh", verify_response.data)
+
+        created_user.refresh_from_db()
+        self.assertTrue(created_user.is_active)
+
     def test_signup_otp_resend_issues_new_code_for_inactive_user(self):
         signup_response = self.client.post(
             reverse("register"),
