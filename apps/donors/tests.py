@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
-from apps.donors.models import DonorCommunication
+from apps.donors.models import Donor, DonorCommunication
 
 User = get_user_model()
 
@@ -49,3 +49,24 @@ class DonorEngagementTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["total_donors"], 1)
         self.assertGreaterEqual(response.data["total_communications"], 1)
+
+    def test_donor_portal_update_is_self_service(self):
+        donor_user = User.objects.create_user(
+            username="donor",
+            email="sarah@example.com",
+            password="password123",
+            full_name="Sarah Donor",
+            role_id="DONOR_USER",
+        )
+        self.client.force_authenticate(donor_user)
+        response = self.client.patch(
+            reverse("donors-me"),
+            {
+                "contact_person": "Sarah Donor",
+                "contact_email": "updated@example.com",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        donor = Donor.objects.get(pk=self.donor["id"])
+        self.assertEqual(donor.contact_email, "updated@example.com")

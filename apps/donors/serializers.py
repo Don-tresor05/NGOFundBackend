@@ -10,6 +10,18 @@ class DonorSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at"]
 
 
+class DonorSelfServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Donor
+        fields = [
+            "organization_name",
+            "contact_person",
+            "contact_email",
+            "country",
+            "category",
+        ]
+
+
 class DonorCommunicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = DonorCommunication

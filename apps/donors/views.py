@@ -9,7 +9,7 @@ from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
 from apps.donors.models import Donor, DonorCommunication
-from apps.donors.serializers import DonorCommunicationSerializer, DonorSerializer
+from apps.donors.serializers import DonorCommunicationSerializer, DonorSelfServiceSerializer, DonorSerializer
 
 
 class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
@@ -21,6 +21,14 @@ class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
     filterset_fields = ["status", "category", "country"]
     search_fields = ["organization_name", "contact_person", "contact_email", "category"]
     ordering_fields = ["organization_name", "created_at", "status"]
+
+    def _linked_donor(self, user):
+        normalized_email = user.email.strip().lower()
+        normalized_name = user.full_name.strip().lower()
+        return (
+            Donor.objects.filter(contact_email__iexact=normalized_email).first()
+            or Donor.objects.filter(contact_person__iexact=normalized_name).first()
+        )
 
     @action(detail=False, methods=["get"], url_path="engagement-dashboard")
     def engagement_dashboard(self, request):
@@ -92,6 +100,20 @@ class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
         )
         self._write_audit_log("DONOR_ACKNOWLEDGED", donor)
         return Response(DonorCommunicationSerializer(communication).data, status=201)
+
+    @action(detail=False, methods=["get", "patch"], url_path="me")
+    def me(self, request):
+        donor = self._linked_donor(request.user)
+        if not donor:
+            return Response({"detail": "No donor profile is linked to this account."}, status=404)
+
+        if request.method == "PATCH":
+            serializer = DonorSelfServiceSerializer(instance=donor, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            self._write_audit_log("DONOR_PROFILE_UPDATED", donor)
+
+        return Response(DonorSerializer(donor).data)
 
 
 class DonorCommunicationViewSet(AuditLogMixin, viewsets.ModelViewSet):
