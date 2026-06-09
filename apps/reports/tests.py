@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.core.management import call_command
 from django.core import mail
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -86,3 +87,27 @@ class ReportWorkflowTests(APITestCase):
         deliveries_response = self.client.get(reverse("report-deliveries-list"))
         self.assertEqual(deliveries_response.status_code, 200)
         self.assertGreaterEqual(len(deliveries_response.data), 1)
+
+    def test_scheduled_reports_management_command(self):
+        schedule = ReportSchedule.objects.create(
+            grant=self.grant,
+            created_by=self.user,
+            report_type="Monthly Finance",
+            frequency="monthly",
+            delivery_method="email",
+            recipient_emails="board@example.com,finance@example.com",
+        )
+        Report.objects.create(
+            grant=self.grant,
+            generated_by=self.user,
+            report_type="Monthly Finance",
+            format="PDF",
+        )
+
+        call_command("run_scheduled_reports")
+
+        schedule.refresh_from_db()
+        self.assertIsNotNone(schedule.last_run_at)
+        self.assertIsNotNone(schedule.next_run_at)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertTrue(ReportDelivery.objects.filter(report__report_type="Monthly Finance").exists())
