@@ -1,4 +1,5 @@
 from datetime import timedelta
+from django.core.exceptions import ImproperlyConfigured
 from pathlib import Path
 import os
 
@@ -19,8 +20,22 @@ def _load_dotenv(path: Path) -> None:
 
 _load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-secret-key-for-local-development-only")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+
+
+def _resolve_secret_key() -> str:
+    secret_key = os.getenv("DJANGO_SECRET_KEY", "").strip()
+    if secret_key and len(secret_key) >= 50 and secret_key not in {
+        "change-me",
+        "unsafe-dev-secret-key-for-local-development-only",
+    }:
+        return secret_key
+    if DEBUG:
+        return "django-insecure-ngofund-local-development-secret-key-change-me-now"
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set to a strong value when DEBUG is False.")
+
+
+SECRET_KEY = _resolve_secret_key()
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")]
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
@@ -155,11 +170,19 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
-EMAIL_BACKEND = os.getenv(
-    "DJANGO_EMAIL_BACKEND",
-    "django.core.mail.backends.smtp.EmailBackend"
-    if EMAIL_HOST
-    else ("django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"),
-)
+
+
+def _resolve_email_backend() -> str:
+    backend = os.getenv("DJANGO_EMAIL_BACKEND", "").strip()
+    if backend:
+        return backend
+    if EMAIL_HOST:
+        return "django.core.mail.backends.smtp.EmailBackend"
+    if DEBUG:
+        return "django.core.mail.backends.console.EmailBackend"
+    raise ImproperlyConfigured("EMAIL_HOST or DJANGO_EMAIL_BACKEND must be configured when DEBUG is False.")
+
+
+EMAIL_BACKEND = _resolve_email_backend()
 if not os.getenv("DEFAULT_FROM_EMAIL") and EMAIL_HOST_USER:
     DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
