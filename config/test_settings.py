@@ -1,5 +1,7 @@
 from .settings import *  # noqa: F401,F403
 
+SECRET_KEY = "django-insecure-ngofund-test-secret-key-2026-keep-this-long"
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
