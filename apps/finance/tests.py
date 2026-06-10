@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
@@ -205,3 +206,42 @@ class ExpenseApprovalWorkflowTests(APITestCase):
         transaction.refresh_from_db()
         self.assertTrue(line.matched)
         self.assertEqual(transaction.status, Transaction.Status.RECONCILED)
+
+    def test_bank_statement_file_upload_is_parsed(self):
+        bank_account = BankAccount.objects.create(
+            account_name="Operations Account",
+            bank_name="BPR",
+            account_number="1234500011",
+            currency="USD",
+        )
+        statement = BankStatement.objects.create(
+            bank_account=bank_account,
+            statement_number="TMP-CSV",
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+            opening_balance=1000,
+            closing_balance=2000,
+            imported_by=self.finance_user,
+        )
+        statement_file = SimpleUploadedFile(
+            "statement.csv",
+            b"transaction_date,description,reference_number,amount\n2026-06-01,Donation receipt,REF-CSV-1,1000.00\n",
+            content_type="text/csv",
+        )
+
+        self.client.force_authenticate(self.finance_user)
+        response = self.client.post(
+            reverse("bank-statements-import-lines", args=[statement.pk]),
+            {
+                "statement_number": "ST-CSV",
+                "period_start": "2026-06-01",
+                "period_end": "2026-06-30",
+                "opening_balance": "1000.00",
+                "closing_balance": "2000.00",
+                "statement_file": statement_file,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(len(response.data["lines"]), 1)
+        self.assertEqual(response.data["lines"][0]["reference_number"], "REF-CSV-1")

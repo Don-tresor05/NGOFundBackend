@@ -1,3 +1,6 @@
+import csv
+import io
+
 from rest_framework import serializers
 
 from apps.finance.models import BankAccount, BankStatement, BankStatementLine, ExpenseApproval, Reconciliation, Transaction
@@ -75,4 +78,66 @@ class BankStatementImportSerializer(serializers.Serializer):
     opening_balance = serializers.DecimalField(max_digits=14, decimal_places=2)
     closing_balance = serializers.DecimalField(max_digits=14, decimal_places=2)
     statement_file = serializers.FileField(required=False, allow_null=True)
-    lines = BankStatementLineImportSerializer(many=True)
+    lines = BankStatementLineImportSerializer(many=True, required=False)
+
+    def validate(self, attrs):
+        lines = attrs.get("lines") or []
+        statement_file = attrs.get("statement_file")
+        if not lines and statement_file is None:
+            raise serializers.ValidationError("Provide statement lines or upload a statement file.")
+
+        if not lines and statement_file is not None:
+            lines = self._parse_statement_file(statement_file)
+            attrs["lines"] = lines
+
+        if not lines:
+            raise serializers.ValidationError("The imported statement does not contain any lines.")
+
+        return attrs
+
+    def _parse_statement_file(self, statement_file):
+        try:
+          raw_content = statement_file.read()
+        finally:
+            try:
+                statement_file.seek(0)
+            except Exception:
+                pass
+
+        try:
+            content = raw_content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise serializers.ValidationError("Statement file must be UTF-8 encoded CSV.") from exc
+
+        reader = csv.DictReader(io.StringIO(content))
+        if not reader.fieldnames:
+            raise serializers.ValidationError("Statement file is missing a header row.")
+
+        normalized_headers = {field.strip().lower(): field for field in reader.fieldnames if field}
+        required_headers = {"transaction_date", "description", "amount"}
+        missing_headers = required_headers - set(normalized_headers)
+        if missing_headers:
+            raise serializers.ValidationError(
+                f"Statement file is missing required columns: {', '.join(sorted(missing_headers))}."
+            )
+
+        parsed_lines = []
+        for row in reader:
+            payload = {
+                "transaction_date": row.get(normalized_headers["transaction_date"], "").strip(),
+                "description": row.get(normalized_headers["description"], "").strip(),
+                "reference_number": row.get(normalized_headers.get("reference_number", ""), "").strip()
+                if normalized_headers.get("reference_number")
+                else "",
+                "amount": row.get(normalized_headers["amount"], "").strip(),
+            }
+            if not any(payload.values()):
+                continue
+            line_serializer = BankStatementLineImportSerializer(data=payload)
+            line_serializer.is_valid(raise_exception=True)
+            parsed_lines.append(line_serializer.validated_data)
+
+        if not parsed_lines:
+            raise serializers.ValidationError("Statement file did not contain any valid lines.")
+
+        return parsed_lines
