@@ -1,16 +1,54 @@
 import csv
 import io
+from decimal import Decimal
 
 from rest_framework import serializers
 
-from apps.finance.models import BankAccount, BankStatement, BankStatementLine, ExpenseApproval, Reconciliation, Transaction
+from apps.finance.models import (
+    BankAccount,
+    BankStatement,
+    BankStatementLine,
+    CurrencyRate,
+    ExpenseApproval,
+    Reconciliation,
+    Transaction,
+)
 
 
 class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = "__all__"
-        read_only_fields = ["created_at", "processed_by"]
+        read_only_fields = ["created_at", "processed_by", "base_amount"]
+
+    def validate(self, attrs):
+        currency = attrs.get('currency', 'RWF')
+        amount = attrs.get('amount')
+        
+        if currency != 'RWF' and amount:
+            rate_obj = CurrencyRate.objects.filter(
+                from_currency=currency,
+                to_currency='RWF',
+                effective_date__lte=attrs.get('transaction_date')
+            ).order_by('-effective_date').first()
+            
+            if rate_obj:
+                attrs['exchange_rate'] = rate_obj.rate
+                attrs['base_amount'] = amount * rate_obj.rate
+            else:
+                attrs['base_amount'] = amount
+        else:
+            attrs['base_amount'] = amount
+            attrs['exchange_rate'] = Decimal('1.0')
+        
+        return attrs
+
+
+class CurrencyRateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CurrencyRate
+        fields = "__all__"
+        read_only_fields = ["created_at"]
 
 
 class ExpenseApprovalSerializer(serializers.ModelSerializer):
