@@ -9,17 +9,69 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
-from apps.finance.models import BankAccount, BankStatement, BankStatementLine, ExpenseApproval, Reconciliation, Transaction
+from apps.finance.models import (
+    BankAccount,
+    BankStatement,
+    BankStatementLine,
+    CurrencyRate,
+    ExpenseApproval,
+    Reconciliation,
+    Transaction,
+)
 from apps.finance.serializers import (
     BankAccountSerializer,
     BankStatementImportSerializer,
     BankStatementLineSerializer,
     BankStatementSerializer,
+    CurrencyRateSerializer,
     ExpenseApprovalSerializer,
     ReconciliationSerializer,
     TransactionSerializer,
 )
 from apps.requisitions.models import Requisition
+
+
+class CurrencyRateViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = CurrencyRate.objects.all()
+    serializer_class = CurrencyRateSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.SUPER_ADMIN]
+    required_permissions = ["manage_finance"]
+    filterset_fields = ["from_currency", "to_currency", "effective_date"]
+    ordering_fields = ["effective_date", "from_currency", "to_currency"]
+
+    @action(detail=False, methods=["get"], url_path="convert")
+    def convert(self, request):
+        from_currency = request.query_params.get('from')
+        to_currency = request.query_params.get('to', 'RWF')
+        amount = request.query_params.get('amount', '0')
+        date = request.query_params.get('date', timezone.now().date())
+        
+        try:
+            amount = float(amount)
+        except ValueError:
+            return Response({"error": "Invalid amount"}, status=400)
+        
+        if from_currency == to_currency:
+            return Response({"converted_amount": amount, "rate": 1.0, "from_currency": from_currency, "to_currency": to_currency})
+        
+        rate_obj = CurrencyRate.objects.filter(
+            from_currency=from_currency,
+            to_currency=to_currency,
+            effective_date__lte=date
+        ).order_by('-effective_date').first()
+        
+        if not rate_obj:
+            return Response({"error": f"No exchange rate found for {from_currency}/{to_currency}"}, status=404)
+        
+        converted = amount * float(rate_obj.rate)
+        return Response({
+            "converted_amount": round(converted, 2),
+            "rate": float(rate_obj.rate),
+            "from_currency": from_currency,
+            "to_currency": to_currency,
+            "effective_date": rate_obj.effective_date
+        })
 
 
 class TransactionViewSet(AuditLogMixin, viewsets.ModelViewSet):
