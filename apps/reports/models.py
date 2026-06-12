@@ -1,6 +1,23 @@
 from django.db import models
 
 
+class ReportTemplate(models.Model):
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="report_templates")
+    template_config = models.JSONField(help_text="Field configuration for report builder")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        db_table = "report_templates"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Report(models.Model):
     class Format(models.TextChoices):
         PDF = "PDF", "PDF"
@@ -10,8 +27,10 @@ class Report(models.Model):
     grant = models.ForeignKey("grants.Grant", on_delete=models.PROTECT, related_name="reports")
     generated_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="reports")
     report_type = models.CharField(max_length=100)
+    template = models.ForeignKey("reports.ReportTemplate", on_delete=models.SET_NULL, null=True, blank=True, related_name="reports")
     file = models.FileField(upload_to="reports/", null=True, blank=True)
     format = models.CharField(max_length=20, choices=Format.choices)
+    custom_fields = models.JSONField(null=True, blank=True, help_text="Custom field selection from builder")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
