@@ -1,6 +1,27 @@
 from django.db import models
 
 
+class CurrencyRate(models.Model):
+    from_currency = models.CharField(max_length=3)
+    to_currency = models.CharField(max_length=3)
+    rate = models.DecimalField(max_digits=12, decimal_places=6)
+    effective_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-effective_date"]
+        db_table = "currency_rates"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["from_currency", "to_currency", "effective_date"],
+                name="unique_currency_rate_per_date"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.from_currency}/{self.to_currency}: {self.rate}"
+
+
 class BankAccount(models.Model):
     account_name = models.CharField(max_length=180)
     bank_name = models.CharField(max_length=180)
@@ -34,6 +55,9 @@ class Transaction(models.Model):
     )
     processed_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="processed_transactions")
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3, default="RWF")
+    base_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    exchange_rate = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
     transaction_date = models.DateField()
     bank_reference_number = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
