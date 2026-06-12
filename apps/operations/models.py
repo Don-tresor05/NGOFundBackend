@@ -47,6 +47,7 @@ class ProcessDocument(models.Model):
     version = models.CharField(max_length=40, default="v1")
     summary = models.CharField(max_length=255, blank=True)
     content = models.TextField()
+    flowchart = models.TextField(blank=True, help_text="Mermaid.js flowchart definition")
     created_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="process_documents")
     approved_by = models.ForeignKey(
         "accounts.User",
