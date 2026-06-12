@@ -1,3 +1,5 @@
+import csv
+from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Count, Max
 from rest_framework import viewsets
@@ -9,7 +11,12 @@ from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
 from apps.donors.models import Donor, DonorCommunication
-from apps.donors.serializers import DonorCommunicationSerializer, DonorSelfServiceSerializer, DonorSerializer
+from apps.donors.serializers import (
+    DonorCommunicationSerializer,
+    DonorSelfServiceSerializer,
+    DonorSerializer,
+    DonorBulkImportSerializer,
+)
 
 
 class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
@@ -114,6 +121,36 @@ class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
             self._write_audit_log("DONOR_PROFILE_UPDATED", donor)
 
         return Response(DonorSerializer(donor).data)
+
+    @action(detail=False, methods=["post"], url_path="bulk-import")
+    def bulk_import(self, request):
+        serializer = DonorBulkImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        self._write_audit_log("DONORS_BULK_IMPORTED", None, extra_data=result)
+        return Response(result, status=201)
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        donors = self.filter_queryset(self.get_queryset())
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="donors_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['organization_name', 'contact_person', 'contact_email', 'country', 'category', 'status', 'notes'])
+        
+        for donor in donors:
+            writer.writerow([
+                donor.organization_name,
+                donor.contact_person,
+                donor.contact_email,
+                donor.country,
+                donor.category,
+                donor.status,
+                donor.notes,
+            ])
+        
+        return response
 
 
 class DonorCommunicationViewSet(AuditLogMixin, viewsets.ModelViewSet):
