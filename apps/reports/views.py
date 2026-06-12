@@ -6,9 +6,40 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
-from apps.reports.models import Report, ReportDelivery, ReportSchedule
-from apps.reports.serializers import ReportDeliverySerializer, ReportScheduleSerializer, ReportSerializer
+from apps.reports.models import Report, ReportDelivery, ReportSchedule, ReportTemplate
+from apps.reports.serializers import (
+    ReportDeliverySerializer,
+    ReportScheduleSerializer,
+    ReportSerializer,
+    ReportTemplateSerializer,
+)
 from apps.reports.services import dispatch_report_delivery, run_report_schedule
+
+
+class ReportTemplateViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    queryset = ReportTemplate.objects.select_related("created_by")
+    serializer_class = ReportTemplateSerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.FINANCE_OFFICER, Role.SUPER_ADMIN]
+    required_permissions = ["manage_reports"]
+    filterset_fields = ["is_active", "created_by"]
+    search_fields = ["name", "description"]
+    ordering_fields = ["name", "created_at"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(created_by=self.request.user)
+        self._write_audit_log(self.audit_create_action, instance)
+
+    @action(detail=False, methods=["get"], url_path="available-fields")
+    def available_fields(self, request):
+        return Response({
+            "donor_fields": ["organization_name", "contact_person", "contact_email", "country", "category", "status"],
+            "grant_fields": ["grant_title", "donor", "total_amount", "grant_date", "start_date", "end_date", "status"],
+            "project_fields": ["name", "grant", "start_date", "end_date", "status"],
+            "transaction_fields": ["amount", "currency", "base_amount", "transaction_date", "bank_reference_number", "status"],
+            "budget_fields": ["line_name", "allocated_amount", "spent_amount", "remaining_amount"],
+            "requisition_fields": ["description", "amount", "requisition_date", "status"],
+        })
 
 
 class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
