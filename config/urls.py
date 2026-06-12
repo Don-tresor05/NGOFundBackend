@@ -26,6 +26,7 @@ from apps.finance.views import (
     BankAccountViewSet,
     BankStatementLineViewSet,
     BankStatementViewSet,
+    CurrencyRateViewSet,
     ExpenseApprovalViewSet,
     ReconciliationViewSet,
     TransactionViewSet,
@@ -33,7 +34,7 @@ from apps.finance.views import (
 from apps.grants.views import GrantViewSet
 from apps.operations.views import ProcessDocumentViewSet, StaffRequirementViewSet
 from apps.projects.views import BudgetLineViewSet, ProjectMemberViewSet, ProjectViewSet, ReallocationRequestViewSet
-from apps.reports.views import ReportDeliveryViewSet, ReportScheduleViewSet, ReportViewSet
+from apps.reports.views import ReportDeliveryViewSet, ReportScheduleViewSet, ReportTemplateViewSet, ReportViewSet
 from apps.requisitions.views import RequisitionItemViewSet, RequisitionViewSet
 from apps.testing_validation.views import BugReportViewSet, ReleaseNoteViewSet, TestCaseViewSet, UATFeedbackViewSet
 
@@ -55,11 +56,13 @@ router.register("requisitions", RequisitionViewSet, basename="requisitions")
 router.register("requisition-items", RequisitionItemViewSet, basename="requisition-items")
 router.register("expense-approvals", ExpenseApprovalViewSet, basename="expense-approvals")
 router.register("transactions", TransactionViewSet, basename="transactions")
+router.register("currency-rates", CurrencyRateViewSet, basename="currency-rates")
 router.register("bank-accounts", BankAccountViewSet, basename="bank-accounts")
 router.register("bank-statements", BankStatementViewSet, basename="bank-statements")
 router.register("bank-statement-lines", BankStatementLineViewSet, basename="bank-statement-lines")
 router.register("reconciliations", ReconciliationViewSet, basename="reconciliations")
 router.register("reports", ReportViewSet, basename="reports")
+router.register("report-templates", ReportTemplateViewSet, basename="report-templates")
 router.register("report-deliveries", ReportDeliveryViewSet, basename="report-deliveries")
 router.register("report-schedules", ReportScheduleViewSet, basename="report-schedules")
 router.register("audit-logs", AuditLogViewSet, basename="audit-logs")
