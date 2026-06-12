@@ -1,6 +1,20 @@
 from rest_framework import serializers
 
-from apps.reports.models import Report, ReportDelivery, ReportSchedule
+from apps.reports.models import Report, ReportDelivery, ReportSchedule, ReportTemplate
+
+
+class ReportTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportTemplate
+        fields = "__all__"
+        read_only_fields = ["created_by", "created_at", "updated_at"]
+
+    def validate_template_config(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("template_config must be an object")
+        if 'fields' not in value:
+            raise serializers.ValidationError("template_config must contain 'fields' array")
+        return value
 
 
 class ReportSerializer(serializers.ModelSerializer):
