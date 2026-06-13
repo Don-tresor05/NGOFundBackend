@@ -93,8 +93,8 @@ class RegisterView(generics.CreateAPIView):
         validated_data = serializer.validated_data
         
         # Restrict self-registration to DONOR_USER role only
-        role = Role.objects.filter(id=validated_data["role_id"]).first()
-        if role and role.code != 'DONOR_USER':
+        role = Role.objects.filter(role_key=validated_data["role"]).first()
+        if role and role.role_key != 'DONOR_USER':
             return Response(
                 {
                     "detail": "Self-registration is only available for donors. Staff accounts must be created by administrators.",
