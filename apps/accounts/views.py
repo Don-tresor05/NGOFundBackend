@@ -133,6 +133,20 @@ class RegisterView(generics.CreateAPIView):
             user = serializer.save()
             user.is_active = False
             user.save(update_fields=["is_active"])
+            
+            # Auto-create Donor organization for DONOR_USER registrations
+            if user.role.role_name == 'DONOR_USER':
+                from apps.donors.models import Donor
+                Donor.objects.get_or_create(
+                    contact_email=user.email,
+                    defaults={
+                        'organization_name': validated_data.get('full_name', user.full_name),
+                        'contact_person': user.full_name,
+                        'country': validated_data.get('location', 'Rwanda'),
+                        'category': validated_data.get('donor_type', 'individual'),
+                        'status': 'active',
+                    }
+                )
 
         issue_signup_otp(user)
         payload = SignupOtpResponseSerializer(
