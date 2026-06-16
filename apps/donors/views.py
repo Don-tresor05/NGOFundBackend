@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.db.models import Count, Max
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from apps.accounts.models import Role
@@ -22,12 +22,17 @@ from apps.donors.serializers import (
 class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
     queryset = Donor.objects.all()
     serializer_class = DonorSerializer
-    permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.DONOR_USER]
     required_permissions = ["manage_donors"]
     filterset_fields = ["status", "category", "country"]
     search_fields = ["organization_name", "contact_person", "contact_email", "category"]
     ordering_fields = ["organization_name", "created_at", "status"]
+    
+    def get_permissions(self):
+        """Allow public read access"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated(), RoleBasedPermission()]
 
     def _linked_donor(self, user):
         normalized_email = user.email.strip().lower()

@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from apps.accounts.models import Role
@@ -21,7 +21,6 @@ from apps.projects.serializers import (
 class ProjectViewSet(AuditLogMixin, viewsets.ModelViewSet):
     queryset = Project.objects.select_related("grant")
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.FINANCE_OFFICER, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR, Role.DONOR_USER]
     required_permissions = ["manage_projects"]
     action_roles = {
@@ -32,6 +31,12 @@ class ProjectViewSet(AuditLogMixin, viewsets.ModelViewSet):
     filterset_fields = ["grant", "status"]
     search_fields = ["name", "description", "grant__grant_title"]
     ordering_fields = ["start_date", "end_date", "status", "name"]
+    
+    def get_permissions(self):
+        """Allow public read access, require auth for modifications"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated(), RoleBasedPermission()]
 
     @action(detail=True, methods=["post"], url_path="activate")
     def activate(self, request, pk=None):
@@ -65,12 +70,17 @@ class ProjectViewSet(AuditLogMixin, viewsets.ModelViewSet):
 class BudgetLineViewSet(AuditLogMixin, viewsets.ModelViewSet):
     queryset = BudgetLine.objects.select_related("grant")
     serializer_class = BudgetLineSerializer
-    permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.FINANCE_OFFICER, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR]
     required_permissions = ["manage_projects"]
     filterset_fields = ["grant"]
     search_fields = ["line_name", "grant__grant_title"]
     ordering_fields = ["allocated_amount", "spent_amount", "line_name"]
+    
+    def get_permissions(self):
+        """Allow public read access"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated(), RoleBasedPermission()]
 
 
 class ReallocationRequestViewSet(AuditLogMixin, viewsets.ModelViewSet):

@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from apps.accounts.models import Role
@@ -77,7 +77,6 @@ class CurrencyRateViewSet(AuditLogMixin, viewsets.ModelViewSet):
 class TransactionViewSet(AuditLogMixin, viewsets.ModelViewSet):
     queryset = Transaction.objects.select_related("requisition", "budget_line", "processed_by")
     serializer_class = TransactionSerializer
-    permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.DONOR_USER]
     required_permissions = ["manage_finance"]
     action_roles = {
@@ -86,6 +85,12 @@ class TransactionViewSet(AuditLogMixin, viewsets.ModelViewSet):
     filterset_fields = ["budget_line", "processed_by", "status", "transaction_date"]
     search_fields = ["bank_reference_number", "budget_line__line_name"]
     ordering_fields = ["transaction_date", "amount", "status", "created_at"]
+    
+    def get_permissions(self):
+        """Allow public read access"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated(), RoleBasedPermission()]
 
     def perform_create(self, serializer):
         with db_transaction.atomic():
