@@ -13,9 +13,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Notification, PasswordResetRequest, Permission, Role, RolePermission, SignupOtp, SystemSetting
+from apps.accounts.models import LoginActivity, Notification, PasswordResetRequest, Permission, Role, RolePermission, SignupOtp, SystemSetting
 from apps.accounts.permissions import IsSuperAdmin, RoleBasedPermission
 from apps.accounts.serializers import (
+    LoginActivitySerializer,
     LoginSerializer,
     NotificationSerializer,
     NotificationSummarySerializer,
@@ -70,16 +71,45 @@ class LoginView(generics.GenericAPIView):
     serializer_class = LoginSerializer
 
     def post(self, request):
+        from apps.accounts.models import LoginActivity
+        
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data["user"]
-        return Response(
-            {
-                "access": serializer.validated_data["access"],
-                "refresh": serializer.validated_data["refresh"],
-                "user": UserSerializer(user).data,
-            }
-        )
+        
+        if serializer.is_valid():
+            user = serializer.validated_data["user"]
+            
+            # Track successful login
+            LoginActivity.objects.create(
+                user=user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+                success=True
+            )
+            
+            return Response(
+                {
+                    "access": serializer.validated_data["access"],
+                    "refresh": serializer.validated_data["refresh"],
+                    "user": UserSerializer(user).data,
+                }
+            )
+        else:
+            # Track failed login attempt
+            email = request.data.get('email')
+            if email:
+                try:
+                    user = User.objects.get(email=email)
+                    LoginActivity.objects.create(
+                        user=user,
+                        ip_address=request.META.get('REMOTE_ADDR'),
+                        user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+                        success=False,
+                        failure_reason='Invalid credentials'
+                    )
+                except User.DoesNotExist:
+                    pass
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -426,3 +456,48 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
     required_permissions = ["manage_permissions"]
     search_fields = ["role__role_name", "permission__permission_name"]
     ordering_fields = ["granted_at", "role__role_name", "permission__permission_name"]
+
+    @action(detail=False, methods=["post"], url_path="bulk-update")
+    def bulk_update(self, request):
+        """
+        Accepts: { "permissions": [{"role_id": 1, "permission_id": 2}, ...] }
+        Replaces all role-permission mappings with the provided set.
+        """
+        permissions_data = request.data.get("permissions", [])
+        
+        # Clear existing permissions
+        RolePermission.objects.all().delete()
+        
+        # Create new permissions
+        new_permissions = []
+        for item in permissions_data:
+            role_id = item.get("role_id")
+            permission_id = item.get("permission_id")
+            if role_id and permission_id:
+                new_permissions.append(
+                    RolePermission(
+                        role_id=role_id,
+                        permission_id=permission_id,
+                        granted_by=request.user
+                    )
+                )
+        
+        RolePermission.objects.bulk_create(new_permissions, ignore_conflicts=True)
+        
+        return Response({
+            "detail": f"Successfully updated {len(new_permissions)} permissions",
+            "count": len(new_permissions)
+        }, status=status.HTTP_200_OK)
+
+
+
+class LoginActivityViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = LoginActivity.objects.select_related('user').all()
+    serializer_class = LoginActivitySerializer
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    allowed_roles = [Role.SUPER_ADMIN]
+    required_permissions = ["manage_users"]
+    filterset_fields = ['user', 'success']
+    search_fields = ['user__full_name', 'user__email', 'ip_address']
+    ordering_fields = ['created_at', 'success']
+    ordering = ['-created_at']
