@@ -156,3 +156,22 @@ class SignupOtp(models.Model):
 
     def __str__(self) -> str:
         return f"Signup OTP for {self.user.email}"
+
+
+class LoginActivity(models.Model):
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="login_activities")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    success = models.BooleanField(default=True)
+    failure_reason = models.CharField(max_length=200, blank=True)
+    session_key = models.CharField(max_length=100, blank=True)
+    logged_out_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        db_table = "login_activities"
+
+    def __str__(self) -> str:
+        status = "Success" if self.success else "Failed"
+        return f"{status} login for {self.user.email} at {self.created_at}"
