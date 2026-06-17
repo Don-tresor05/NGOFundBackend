@@ -7,6 +7,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.accounts.views import (
+    LoginActivityViewSet,
     LoginView,
     NotificationViewSet,
     PermissionViewSet,
@@ -40,6 +41,7 @@ from apps.testing_validation.views import BugReportViewSet, ReleaseNoteViewSet, 
 
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="users")
+router.register("login-activities", LoginActivityViewSet, basename="login-activities")
 router.register("roles", RoleViewSet, basename="roles")
 router.register("permissions", PermissionViewSet, basename="permissions")
 router.register("role-permissions", RolePermissionViewSet, basename="role-permissions")
