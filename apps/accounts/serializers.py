@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Notification, Permission, PasswordResetRequest, Role, RolePermission, SignupOtp, SystemSetting
+from apps.accounts.models import LoginActivity, Notification, Permission, PasswordResetRequest, Role, RolePermission, SignupOtp, SystemSetting
 
 User = get_user_model()
 
@@ -186,3 +186,22 @@ class SystemSettingBulkUpdateItemSerializer(serializers.Serializer):
     label = serializers.CharField(required=False)
     setting_value = serializers.CharField()
     setting_group = serializers.CharField(required=False)
+
+
+
+class LoginActivitySerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    duration_minutes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LoginActivity
+        fields = ['id', 'user', 'user_name', 'user_email', 'ip_address', 'user_agent', 
+                  'success', 'failure_reason', 'session_key', 'created_at', 'logged_out_at', 'duration_minutes']
+        read_only_fields = ['id', 'created_at']
+
+    def get_duration_minutes(self, obj):
+        if obj.logged_out_at and obj.created_at:
+            delta = obj.logged_out_at - obj.created_at
+            return int(delta.total_seconds() / 60)
+        return None
