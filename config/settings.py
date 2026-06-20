@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "apps.compliance",
     "apps.operations",
     "apps.testing_validation",
+    "apps.payments",
 ]
 
 MIDDLEWARE = [
@@ -181,6 +182,14 @@ def _resolve_email_backend() -> str:
     if DEBUG:
         return "django.core.mail.backends.console.EmailBackend"
     raise ImproperlyConfigured("EMAIL_HOST or DJANGO_EMAIL_BACKEND must be configured when DEBUG is False.")
+
+
+EMAIL_BACKEND = _resolve_email_backend()
+
+# Stripe Configuration
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 
 EMAIL_BACKEND = _resolve_email_backend()

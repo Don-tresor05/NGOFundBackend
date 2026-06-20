@@ -85,6 +85,7 @@ urlpatterns = [
     path("api/auth/signup/resend-otp/", SignupOtpResendView.as_view(), name="signup_resend_otp"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/profile/", ProfileView.as_view(), name="profile"),
+    path("api/payments/", include("apps.payments.urls")),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
