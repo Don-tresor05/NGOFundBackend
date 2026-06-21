@@ -67,15 +67,26 @@ def check_payment_status(request):
         return Response({"error": "Session ID required"}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        # Retrieve session from Stripe
-        stripe_session = stripe.checkout.Session.retrieve(session_id)
-        
-        # Get local record
+        # Get local record first
         checkout_session = StripeCheckoutSession.objects.get(session_id=session_id)
         
-        # If payment succeeded and not already processed
-        if stripe_session.payment_status == "paid" and checkout_session.status == "pending":
-            handle_checkout_completed(stripe_session)
+        # Try to retrieve session from Stripe
+        try:
+            stripe_session = stripe.checkout.Session.retrieve(session_id)
+            
+            # If payment succeeded and not already processed
+            if stripe_session.payment_status == "paid" and checkout_session.status == "pending":
+                handle_checkout_completed(stripe_session)
+                # Refresh from DB to get updated status
+                checkout_session.refresh_from_db()
+        except stripe.error.StripeError as e:
+            print(f"Stripe API error: {e}")
+            # Continue anyway - return current status
+        except Exception as e:
+            print(f"Error processing payment: {e}")
+            import traceback
+            traceback.print_exc()
+            # Continue anyway - return current status
             
         return Response({
             "status": checkout_session.status,
@@ -86,6 +97,9 @@ def check_payment_status(request):
     except StripeCheckoutSession.DoesNotExist:
         return Response({"error": "Session not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
+        print(f"Fatal error in check_payment_status: {e}")
+        import traceback
+        traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
