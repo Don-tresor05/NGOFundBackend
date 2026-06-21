@@ -281,11 +281,21 @@ def handle_checkout_completed(session):
         # Create notification for donor user
         if donor_user:
             project_name = checkout_session.project.name if checkout_session.project else "General Fund"
+            
+            # Payment success notification
             Notification.objects.create(
                 user=donor_user,
                 type="payment_success",
                 title="Payment Successful",
                 message=f"Your ${checkout_session.amount} donation to {project_name} was processed successfully. Thank you for your support!"
+            )
+            
+            # Thank you message notification (separate)
+            Notification.objects.create(
+                user=donor_user,
+                type="thank_you",
+                title="Thank You for Your Generosity!",
+                message=f"We are deeply grateful for your ${checkout_session.amount} donation to {project_name}. Your contribution is making a real difference in our community. We'll keep you updated on the impact of your support!"
             )
         
         # Send acknowledgment email

@@ -25,20 +25,45 @@ class RequisitionViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
+        from apps.accounts.models import Notification
+        
         requisition = self.get_object()
         requisition.status = Requisition.Status.APPROVED
         requisition.rejection_reason = ""
         requisition.save(update_fields=["status", "rejection_reason"])
         self._write_audit_log("REQUISITION_APPROVED", requisition)
+        
+        # Notify the requester
+        if requisition.submitted_by:
+            Notification.objects.create(
+                user=requisition.submitted_by,
+                type='requisition_approved',
+                title='Requisition Approved',
+                message=f'Your requisition #{requisition.requisition_id} for ${requisition.amount} has been approved by {request.user.get_full_name() or request.user.email}'
+            )
+        
         return Response(self.get_serializer(requisition).data)
 
     @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, pk=None):
+        from apps.accounts.models import Notification
+        
         requisition = self.get_object()
         requisition.status = Requisition.Status.REJECTED
         requisition.rejection_reason = request.data.get("rejection_reason", "")
         requisition.save(update_fields=["status", "rejection_reason"])
         self._write_audit_log("REQUISITION_REJECTED", requisition)
+        
+        # Notify the requester
+        if requisition.submitted_by:
+            reason = f" Reason: {requisition.rejection_reason}" if requisition.rejection_reason else ""
+            Notification.objects.create(
+                user=requisition.submitted_by,
+                type='requisition_rejected',
+                title='Requisition Rejected',
+                message=f'Your requisition #{requisition.requisition_id} for ${requisition.amount} was rejected by {request.user.get_full_name() or request.user.email}.{reason}'
+            )
+        
         return Response(self.get_serializer(requisition).data, status=status.HTTP_200_OK)
 
 

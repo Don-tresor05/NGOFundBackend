@@ -55,6 +55,23 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         instance = serializer.save(generated_by=self.request.user)
         self._write_audit_log(self.audit_create_action, instance)
+        
+        # Notify donors who funded this grant's project
+        if instance.grant:
+            from apps.accounts.models import User, Notification
+            from apps.donors.models import Donor
+            
+            donor = instance.grant.donor
+            if donor:
+                donor_user = User.objects.filter(email=donor.contact_email).first()
+                if donor_user:
+                    project_name = instance.grant.project_set.first().name if instance.grant.project_set.exists() else instance.grant.grant_title
+                    Notification.objects.create(
+                        user=donor_user,
+                        type='impact_report_ready',
+                        title='New Impact Report Available',
+                        message=f'A new {instance.report_type} report is ready for {project_name}. See the impact of your contribution!'
+                    )
 
     @action(detail=True, methods=["post"], url_path="deliver")
     def deliver(self, request, pk=None):
