@@ -269,12 +269,12 @@ def handle_checkout_completed(session):
         
         # Get default budget line
         # Budget lines are linked to grants, not projects
-        # So we need to find a grant for this project
+        # Projects link to grants, so find grant for this project
         budget_line = None
         if checkout_session.project:
-            # Find a grant linked to this project
+            # Find a grant that has this project
             from apps.grants.models import Grant
-            grant = Grant.objects.filter(project=checkout_session.project).first()
+            grant = Grant.objects.filter(projects=checkout_session.project).first()
             if grant:
                 budget_line = grant.budget_lines.first()
         
