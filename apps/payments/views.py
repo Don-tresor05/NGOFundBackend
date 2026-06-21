@@ -190,6 +190,11 @@ def stripe_webhook(request):
         session = event["data"]["object"]
         handle_checkout_completed(session)
     
+    # Handle payment failed
+    elif event["type"] == "checkout.session.expired" or event["type"] == "payment_intent.payment_failed":
+        session = event["data"]["object"]
+        handle_checkout_failed(session, event["type"])
+    
     # Handle invoice paid (for subscriptions)
     elif event["type"] == "invoice.paid":
         invoice = event["data"]["object"]
@@ -198,14 +203,49 @@ def stripe_webhook(request):
     return HttpResponse(status=200)
 
 
+def handle_checkout_failed(session_data, event_type):
+    """Handle failed payment"""
+    try:
+        from apps.accounts.models import User, Notification
+        
+        session_id = session_data.get("id")
+        checkout_session = StripeCheckoutSession.objects.filter(session_id=session_id).first()
+        
+        if checkout_session and checkout_session.donor:
+            donor = checkout_session.donor
+            donor_user = User.objects.filter(email=donor.contact_email).first()
+            
+            # Create notification for donor user
+            if donor_user:
+                project_name = checkout_session.project.name if checkout_session.project else "General Fund"
+                reason = "expired" if event_type == "checkout.session.expired" else "failed"
+                
+                Notification.objects.create(
+                    user=donor_user,
+                    type="payment_failed",
+                    title="Payment Not Completed",
+                    message=f"Your ${checkout_session.amount} donation to {project_name} was not completed (payment {reason}). Please try again."
+                )
+            
+            # Update checkout session status
+            checkout_session.status = "failed"
+            checkout_session.save()
+    
+    except Exception as e:
+        print(f"Error handling failed checkout: {e}")
+
+
 def handle_checkout_completed(session):
     """Process completed checkout and create transaction"""
     try:
         from apps.projects.models import BudgetLine
-        from apps.accounts.models import User
+        from apps.accounts.models import User, Notification
         
         checkout_session = StripeCheckoutSession.objects.get(session_id=session["id"])
         donor = checkout_session.donor
+        
+        # Get donor user account
+        donor_user = User.objects.filter(email=donor.contact_email).first()
         
         # Get or create bank account
         bank_account, _ = BankAccount.objects.get_or_create(
@@ -237,6 +277,16 @@ def handle_checkout_completed(session):
         checkout_session.status = "completed"
         checkout_session.completed_at = timezone.now()
         checkout_session.save()
+        
+        # Create notification for donor user
+        if donor_user:
+            project_name = checkout_session.project.name if checkout_session.project else "General Fund"
+            Notification.objects.create(
+                user=donor_user,
+                type="payment_success",
+                title="Payment Successful",
+                message=f"Your ${checkout_session.amount} donation to {project_name} was processed successfully. Thank you for your support!"
+            )
         
         # Send acknowledgment email
         send_acknowledgment_email(
