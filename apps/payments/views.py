@@ -17,9 +17,44 @@ from apps.projects.models import Project
 from apps.finance.models import Transaction, BankAccount
 from apps.payments.models import StripeCheckoutSession
 from apps.payments.serializers import CreateCheckoutSessionSerializer
+from decimal import Decimal
 
 # Initialize Stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_donor_donations(request):
+    """Get donation history for a donor"""
+    donor_id = request.query_params.get("donor_id")
+    
+    if not donor_id:
+        return Response({"error": "donor_id required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        donations = StripeCheckoutSession.objects.filter(
+            donor_id=donor_id,
+            status="completed"
+        ).order_by('-completed_at')
+        
+        total_amount = sum(d.amount for d in donations)
+        
+        return Response({
+            "total_donations": float(total_amount),
+            "donation_count": donations.count(),
+            "donations": [{
+                "id": d.id,
+                "amount": float(d.amount),
+                "date": d.completed_at,
+                "project": d.project.name if d.project else "General Fund",
+                "reference": d.session_id,
+                "donation_type": d.donation_type
+            } for d in donations]
+        })
+        
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
