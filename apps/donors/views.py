@@ -171,3 +171,34 @@ class DonorCommunicationViewSet(AuditLogMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         instance = serializer.save(created_by=self.request.user)
         self._write_audit_log(self.audit_create_action, instance)
+        
+        # Notify Finance Officers & Executive Directors when donor sends message via portal
+        if instance.channel == 'donor_portal':
+            from apps.accounts.models import User, Notification, Role as RoleModel
+            
+            finance_exec_roles = RoleModel.objects.filter(
+                role_key__in=[Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR]
+            )
+            finance_and_exec = User.objects.filter(role__in=finance_exec_roles)
+            
+            for user in finance_and_exec:
+                Notification.objects.create(
+                    user=user,
+                    type='donor_message',
+                    title='New Donor Message',
+                    message=f'{instance.donor.organization_name} sent a message via Donor Portal: "{instance.message[:100]}..."'
+                )
+        
+        # Notify donor users when staff replies
+        if instance.channel == 'staff_reply':
+            from apps.accounts.models import User, Notification
+            
+            donor_user = User.objects.filter(email=instance.donor.contact_email).first()
+            
+            if donor_user:
+                Notification.objects.create(
+                    user=donor_user,
+                    type='staff_reply',
+                    title='New Message from Staff',
+                    message=f'Staff replied to your message: "{instance.message[:100]}..."'
+                )
