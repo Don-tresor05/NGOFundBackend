@@ -25,10 +25,19 @@ class DonorSelfServiceSerializer(serializers.ModelSerializer):
 
 
 class DonorCommunicationSerializer(serializers.ModelSerializer):
+    donor = DonorSerializer(read_only=True)
+    donor_id = serializers.PrimaryKeyRelatedField(
+        queryset=Donor.objects.all(), source='donor', write_only=True
+    )
+    
     class Meta:
         model = DonorCommunication
-        fields = "__all__"
-        read_only_fields = ["created_by"]
+        fields = [
+            'id', 'donor', 'donor_id', 'created_by', 'channel', 'subject', 
+            'message', 'communication_date', 'communication_type', 'reference', 
+            'status', 'is_read'
+        ]
+        read_only_fields = ["created_by", "id"]
 
 
 class DonorBulkImportSerializer(serializers.Serializer):
