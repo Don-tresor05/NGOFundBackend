@@ -44,6 +44,7 @@ class DonorCommunication(models.Model):
     communication_type = models.CharField(max_length=50, choices=CommunicationType.choices, default=CommunicationType.GENERAL)
     reference = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.SENT)
+    is_read = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-communication_date"]
