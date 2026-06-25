@@ -10,8 +10,13 @@ from apps.finance.models import (
     BankStatementLine,
     CurrencyRate,
     ExpenseApproval,
+    PeriodClose,
+    PaymentBatch,
     Reconciliation,
+    SpendingAlert,
+    ScheduledPayment,
     Transaction,
+    Vendor,
 )
 
 
@@ -62,6 +67,109 @@ class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = BankAccount
         fields = "__all__"
+
+
+class VendorSerializer(serializers.ModelSerializer):
+    outstanding_amount = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+    scheduled_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Vendor
+        fields = "__all__"
+        read_only_fields = ["created_at"]
+
+    def get_outstanding_amount(self, obj):
+        payments = obj.scheduled_payments.exclude(
+            status__in=[ScheduledPayment.Status.PAID, ScheduledPayment.Status.CANCELLED]
+        )
+        return sum(payment.amount for payment in payments)
+
+    def get_paid_amount(self, obj):
+        payments = obj.scheduled_payments.filter(status=ScheduledPayment.Status.PAID)
+        return sum(payment.amount for payment in payments)
+
+    def get_scheduled_count(self, obj):
+        return obj.scheduled_payments.count()
+
+
+class SpendingAlertSerializer(serializers.ModelSerializer):
+    budget_line_name = serializers.CharField(source="budget_line.line_name", read_only=True)
+
+    class Meta:
+        model = SpendingAlert
+        fields = "__all__"
+        read_only_fields = [
+            "acknowledged_by",
+            "resolved_by",
+            "acknowledged_at",
+            "resolved_at",
+            "created_at",
+        ]
+
+
+class PaymentBatchSerializer(serializers.ModelSerializer):
+    scheduled_payment_count = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentBatch
+        fields = "__all__"
+        read_only_fields = ["created_by", "processed_by", "processed_at", "created_at"]
+
+    def get_scheduled_payment_count(self, obj):
+        return obj.scheduled_payments.count()
+
+    def get_total_amount(self, obj):
+        return sum((payment.amount for payment in obj.scheduled_payments.all()), Decimal("0"))
+
+
+class PeriodCloseSerializer(serializers.ModelSerializer):
+    bank_account_name = serializers.CharField(source="bank_account.account_name", read_only=True)
+
+    class Meta:
+        model = PeriodClose
+        fields = "__all__"
+        read_only_fields = [
+            "prepared_by",
+            "closed_by",
+            "prepared_at",
+            "closed_at",
+            "unmatched_statement_lines",
+            "reconciliation_exceptions",
+            "created_at",
+        ]
+
+
+class ScheduledPaymentSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source="vendor.name", read_only=True)
+    budget_line_name = serializers.CharField(source="budget_line.line_name", read_only=True)
+    bank_account_name = serializers.CharField(source="bank_account.account_name", read_only=True)
+    batch_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScheduledPayment
+        fields = "__all__"
+        read_only_fields = [
+            "scheduled_by",
+            "approved_by",
+            "paid_by",
+            "transaction",
+            "batch",
+            "approved_at",
+            "paid_at",
+            "created_at",
+        ]
+
+    def validate(self, attrs):
+        budget_line = attrs.get("budget_line", getattr(self.instance, "budget_line", None))
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        if budget_line and amount and self.instance is None and amount > budget_line.remaining_amount:
+            raise serializers.ValidationError("Scheduled payment exceeds the budget line remaining balance.")
+        return attrs
+
+    def get_batch_name(self, obj):
+        return obj.batch.name if obj.batch else None
 
 
 class BankStatementSerializer(serializers.ModelSerializer):
