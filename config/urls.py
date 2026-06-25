@@ -29,8 +29,14 @@ from apps.finance.views import (
     BankStatementViewSet,
     CurrencyRateViewSet,
     ExpenseApprovalViewSet,
+    FinanceDashboardViewSet,
+    PaymentBatchViewSet,
+    PeriodCloseViewSet,
     ReconciliationViewSet,
+    SpendingAlertViewSet,
+    ScheduledPaymentViewSet,
     TransactionViewSet,
+    VendorViewSet,
 )
 from apps.grants.views import GrantViewSet
 from apps.operations.views import ProcessDocumentViewSet, StaffRequirementViewSet
@@ -57,9 +63,15 @@ router.register("reallocation-requests", ReallocationRequestViewSet, basename="r
 router.register("requisitions", RequisitionViewSet, basename="requisitions")
 router.register("requisition-items", RequisitionItemViewSet, basename="requisition-items")
 router.register("expense-approvals", ExpenseApprovalViewSet, basename="expense-approvals")
+router.register("finance-dashboard", FinanceDashboardViewSet, basename="finance-dashboard")
+router.register("spending-alerts", SpendingAlertViewSet, basename="spending-alerts")
+router.register("payment-batches", PaymentBatchViewSet, basename="payment-batches")
+router.register("period-closes", PeriodCloseViewSet, basename="period-closes")
 router.register("transactions", TransactionViewSet, basename="transactions")
 router.register("currency-rates", CurrencyRateViewSet, basename="currency-rates")
 router.register("bank-accounts", BankAccountViewSet, basename="bank-accounts")
+router.register("vendors", VendorViewSet, basename="vendors")
+router.register("scheduled-payments", ScheduledPaymentViewSet, basename="scheduled-payments")
 router.register("bank-statements", BankStatementViewSet, basename="bank-statements")
 router.register("bank-statement-lines", BankStatementLineViewSet, basename="bank-statement-lines")
 router.register("reconciliations", ReconciliationViewSet, basename="reconciliations")
