@@ -6,7 +6,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
 from apps.donors.models import Donor
-from apps.finance.models import BankAccount, BankStatement, BankStatementLine, ExpenseApproval, Reconciliation, Transaction
+from apps.finance.models import BankAccount, BankStatement, BankStatementLine, ExpenseApproval, PaymentBatch, PeriodClose, Reconciliation, ScheduledPayment, SpendingAlert, Transaction, Vendor
 from apps.grants.models import Grant
 from apps.projects.models import BudgetLine
 from apps.requisitions.models import Requisition
@@ -245,3 +245,107 @@ class ExpenseApprovalWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(len(response.data["lines"]), 1)
         self.assertEqual(response.data["lines"][0]["reference_number"], "REF-CSV-1")
+
+
+class FinanceControlsTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.finance_user = User.objects.create_user(
+            username="finance-controls",
+            email="finance-controls@example.com",
+            password="password123",
+            full_name="Finance Controls",
+            role_id="FINANCE_OFFICER",
+        )
+        self.client.force_authenticate(self.finance_user)
+        donor = Donor.objects.create(
+            organization_name="Controls Donor",
+            contact_person="Control Person",
+            contact_email="control@example.com",
+            country="Rwanda",
+            category="Foundation",
+        )
+        grant = Grant.objects.create(
+            donor=donor,
+            grant_title="Controls Grant",
+            total_amount=40000,
+            currency="USD",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            status="active",
+        )
+        self.budget_line = BudgetLine.objects.create(grant=grant, line_name="Operations", allocated_amount=10000, spent_amount=8500)
+        self.vendor = Vendor.objects.create(name="Stationery World", category="Supplies")
+        self.bank_account = BankAccount.objects.create(
+            account_name="Controls Account",
+            bank_name="BPR",
+            account_number="9988776655",
+            currency="USD",
+        )
+
+    def test_generate_spending_alerts(self):
+        response = self.client.post(reverse("spending-alerts-generate"), format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["created"], 1)
+        self.assertTrue(SpendingAlert.objects.filter(budget_line=self.budget_line).exists())
+
+    def test_payment_batch_processes_scheduled_payments(self):
+        payment = ScheduledPayment.objects.create(
+            vendor=self.vendor,
+            budget_line=self.budget_line,
+            bank_account=self.bank_account,
+            scheduled_by=self.finance_user,
+            description="Office supplies",
+            amount=1000,
+            due_date=date(2026, 6, 10),
+            currency="USD",
+            status=ScheduledPayment.Status.SCHEDULED,
+        )
+        batch = PaymentBatch.objects.create(name="June batch", created_by=self.finance_user)
+        payment.batch = batch
+        payment.save(update_fields=["batch"])
+
+        response = self.client.post(reverse("payment-batches-process", args=[batch.id]), format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        payment.refresh_from_db()
+        batch.refresh_from_db()
+        self.assertEqual(batch.status, PaymentBatch.Status.COMPLETED)
+        self.assertEqual(payment.status, ScheduledPayment.Status.PAID)
+
+    def test_period_close_prepare_and_close(self):
+        statement = BankStatement.objects.create(
+            bank_account=self.bank_account,
+            statement_number="CLOSE-001",
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+            opening_balance=1000,
+            closing_balance=2000,
+            imported_by=self.finance_user,
+        )
+        BankStatementLine.objects.create(
+            bank_statement=statement,
+            transaction_date=date(2026, 6, 10),
+            description="Matched line",
+            reference_number="CLOSE-REF-1",
+            amount=100,
+            matched=True,
+        )
+        close = PeriodClose.objects.create(
+            bank_account=self.bank_account,
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+            prepared_by=self.finance_user,
+        )
+
+        prepare_response = self.client.post(reverse("period-closes-prepare", args=[close.id]), format="json")
+        self.assertEqual(prepare_response.status_code, 200)
+        self.assertEqual(prepare_response.data["status"], PeriodClose.Status.PREPARED)
+
+        close.refresh_from_db()
+        close.unmatched_statement_lines = 0
+        close.reconciliation_exceptions = 0
+        close.save(update_fields=["unmatched_statement_lines", "reconciliation_exceptions"])
+        close_response = self.client.post(reverse("period-closes-close", args=[close.id]), format="json")
+        self.assertEqual(close_response.status_code, 200)
+        close.refresh_from_db()
+        self.assertEqual(close.status, PeriodClose.Status.CLOSED)
