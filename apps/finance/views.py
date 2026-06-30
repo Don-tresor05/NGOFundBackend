@@ -364,9 +364,10 @@ class TransactionViewSet(AuditLogMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         with db_transaction.atomic():
             instance = serializer.save(processed_by=self.request.user)
-            budget_line = instance.budget_line
-            budget_line.spent_amount += instance.amount
-            budget_line.save(update_fields=["spent_amount"])
+            if instance.requisition_id:
+                budget_line = instance.budget_line
+                budget_line.spent_amount += instance.amount
+                budget_line.save(update_fields=["spent_amount"])
             self._write_audit_log(self.audit_create_action, instance)
 
     @action(detail=True, methods=["post"], url_path="reconcile")
