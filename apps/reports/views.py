@@ -1,3 +1,4 @@
+from django.db.models import Q, Sum
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -6,9 +7,12 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
-from apps.finance.models import Reconciliation, Transaction
+from apps.audit.models import AuditLog, Document
+from apps.compliance.models import ComplianceItem
+from apps.finance.models import BankStatementLine, ExpenseApproval, Reconciliation, Transaction
 from apps.projects.models import BudgetLine, Project
 from apps.reports.models import Report, ReportDelivery, ReportSchedule, ReportTemplate
+from apps.requisitions.models import Requisition
 from apps.reports.serializers import (
     ReportDeliverySerializer,
     ReportScheduleSerializer,
@@ -61,8 +65,83 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
         projects = Project.objects.filter(grant=grant).order_by("name")
         transactions = Transaction.objects.filter(budget_line__grant=grant).order_by("-transaction_date", "-created_at")
         reconciliations = Reconciliation.objects.filter(transaction__budget_line__grant=grant).order_by("-created_at")
+        requisitions = Requisition.objects.filter(budget_line__grant=grant).order_by("-created_at")
+        expense_approvals = ExpenseApproval.objects.filter(requisition__budget_line__grant=grant).order_by("-created_at")
+        transaction_references = list(transactions.exclude(bank_reference_number="").values_list("bank_reference_number", flat=True))
+        bank_statement_lines = BankStatementLine.objects.filter(reference_number__in=transaction_references).order_by("-transaction_date", "id")
+        audit_logs = AuditLog.objects.filter(
+            target_entity_type__in=["grant", "project", "budgetline", "transaction", "requisition", "reconciliation", "report"],
+        ).order_by("-timestamp")[:25]
+        receipt_documents = Document.objects.filter(
+            related_entity_type__in=["requisition", "transaction", "report"],
+        ).order_by("-uploaded_at")
+        compliance_items = ComplianceItem.objects.all().order_by("title")
+
+        allocated_total = sum((line.allocated_amount for line in budget_lines), 0)
+        spent_total = sum((line.spent_amount for line in budget_lines), 0)
+        remaining_total = allocated_total - spent_total
+        cleared_total = transactions.filter(status__in=[Transaction.Status.CLEARED, Transaction.Status.RECONCILED]).aggregate(total=Sum("amount"))["total"] or 0
+        contribution_total = transactions.filter(requisition__isnull=True).aggregate(total=Sum("amount"))["total"] or 0
+        budget_variance = remaining_total
+        utilization_percent = (spent_total / allocated_total * 100) if allocated_total else 0
+        burn_rate = spent_total / 12 if spent_total else 0
+        missing_receipts = requisitions.filter(Q(receipt_document__isnull=True) | Q(receipt_document="")).count()
+        pending_approvals = requisitions.filter(status=Requisition.Status.PENDING).count() + expense_approvals.exclude(
+            stage__in=[ExpenseApproval.Stage.APPROVED, ExpenseApproval.Stage.REJECTED]
+        ).count()
+        matched_reconciliations = reconciliations.filter(status=Reconciliation.Status.MATCHED).count()
+        exception_reconciliations = reconciliations.filter(status=Reconciliation.Status.EXCEPTION).count()
+        imported_bank_line_count = bank_statement_lines.count()
+        unmatched_statement_lines = bank_statement_lines.filter(matched=False).count()
+        verified_compliance = compliance_items.filter(verified=True).count()
+        overrun_lines = sum(1 for line in budget_lines if line.spent_amount > line.allocated_amount)
+        underspent_lines = sum(1 for line in budget_lines if line.spent_amount < line.allocated_amount)
 
         return {
+            "financial_summary": {
+                "total_grant_amount": str(grant.total_amount),
+                "allocated_budget": str(allocated_total),
+                "spent_amount": str(spent_total),
+                "remaining_balance": str(remaining_total),
+                "budget_variance": str(budget_variance),
+                "budget_utilization_percent": round(float(utilization_percent), 2),
+                "monthly_burn_rate": str(burn_rate),
+            },
+            "donor_funding": {
+                "donor_name": donor.organization_name,
+                "contact_person": donor.contact_person,
+                "contact_email": donor.contact_email,
+                "contributions_received": str(contribution_total),
+                "cleared_funds": str(cleared_total),
+                "projects_supported": projects.count(),
+                "receipts_generated": transactions.count(),
+                "impact_reports_delivered": ReportDelivery.objects.filter(report__grant=grant, status=ReportDelivery.Status.SENT).count(),
+            },
+            "project_utilization": {
+                "project_count": projects.count(),
+                "budget_line_count": budget_lines.count(),
+                "actual_spending": str(spent_total),
+                "remaining_funds": str(remaining_total),
+                "overrun_lines": overrun_lines,
+                "underspent_lines": underspent_lines,
+            },
+            "reconciliation_report": {
+                "ledger_transactions": transactions.count(),
+                "imported_bank_lines": imported_bank_line_count,
+                "matched_items": matched_reconciliations,
+                "unmatched_items": unmatched_statement_lines,
+                "exceptions": exception_reconciliations,
+                "reconciliation_rate": round((matched_reconciliations / imported_bank_line_count) * 100, 2) if imported_bank_line_count else 0,
+            },
+            "audit_compliance_report": {
+                "audit_trail_references": len(audit_logs),
+                "missing_receipts": missing_receipts,
+                "pending_approvals": pending_approvals,
+                "policy_exceptions": exception_reconciliations + missing_receipts,
+                "compliance_items": compliance_items.count(),
+                "verified_compliance_items": verified_compliance,
+                "compliance_checklist_status": "complete" if compliance_items.count() and verified_compliance == compliance_items.count() else "in_progress",
+            },
             "donor": {
                 "id": donor.pk,
                 "organization_name": donor.organization_name,
@@ -90,6 +169,17 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 }
                 for project in projects
             ],
+            "project_utilization_lines": [
+                {
+                    "id": line.pk,
+                    "line_name": line.line_name,
+                    "allocated_amount": str(line.allocated_amount),
+                    "spent_amount": str(line.spent_amount),
+                    "remaining_amount": str(line.remaining_amount),
+                    "variance_status": "overrun" if line.spent_amount > line.allocated_amount else "underspent" if line.spent_amount < line.allocated_amount else "on_budget",
+                }
+                for line in budget_lines
+            ],
             "budget_lines": [
                 {
                     "id": line.pk,
@@ -112,6 +202,16 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 }
                 for transaction in transactions
             ],
+            "bank_statement_lines": [
+                {
+                    "id": line.pk,
+                    "transaction_date": line.transaction_date.isoformat(),
+                    "reference_number": line.reference_number,
+                    "amount": str(line.amount),
+                    "matched": line.matched,
+                }
+                for line in bank_statement_lines
+            ],
             "reconciliations": [
                 {
                     "id": reconciliation.pk,
@@ -123,6 +223,26 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     "matched_at": reconciliation.matched_at.isoformat() if reconciliation.matched_at else None,
                 }
                 for reconciliation in reconciliations
+            ],
+            "audit_references": [
+                {
+                    "id": log.pk,
+                    "action_type": log.action_type,
+                    "target_entity_type": log.target_entity_type,
+                    "target_entity_id": log.target_entity_id,
+                    "timestamp": log.timestamp.isoformat(),
+                }
+                for log in audit_logs
+            ],
+            "compliance_items": [
+                {
+                    "id": item.pk,
+                    "title": item.title,
+                    "owner": item.owner,
+                    "verified": item.verified,
+                    "verified_at": item.verified_at.isoformat() if item.verified_at else None,
+                }
+                for item in compliance_items
             ],
         }
 
