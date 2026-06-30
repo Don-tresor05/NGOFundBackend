@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from apps.accounts.models import Role
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
+from apps.finance.models import Reconciliation, Transaction
+from apps.projects.models import BudgetLine, Project
 from apps.reports.models import Report, ReportDelivery, ReportSchedule, ReportTemplate
 from apps.reports.serializers import (
     ReportDeliverySerializer,
@@ -52,8 +54,84 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
     search_fields = ["report_type", "grant__grant_title"]
     ordering_fields = ["created_at", "report_type", "format"]
 
+    def _build_report_snapshot(self, report):
+        grant = report.grant
+        donor = grant.donor
+        budget_lines = BudgetLine.objects.filter(grant=grant).order_by("line_name")
+        projects = Project.objects.filter(grant=grant).order_by("name")
+        transactions = Transaction.objects.filter(budget_line__grant=grant).order_by("-transaction_date", "-created_at")
+        reconciliations = Reconciliation.objects.filter(transaction__budget_line__grant=grant).order_by("-created_at")
+
+        return {
+            "donor": {
+                "id": donor.pk,
+                "organization_name": donor.organization_name,
+                "contact_person": donor.contact_person,
+                "contact_email": donor.contact_email,
+                "category": donor.category,
+                "status": donor.status,
+            },
+            "grant": {
+                "id": grant.pk,
+                "grant_title": grant.grant_title,
+                "total_amount": str(grant.total_amount),
+                "currency": grant.currency,
+                "start_date": grant.start_date.isoformat(),
+                "end_date": grant.end_date.isoformat(),
+                "status": grant.status,
+            },
+            "projects": [
+                {
+                    "id": project.pk,
+                    "name": project.name,
+                    "status": project.status,
+                    "start_date": project.start_date.isoformat(),
+                    "end_date": project.end_date.isoformat(),
+                }
+                for project in projects
+            ],
+            "budget_lines": [
+                {
+                    "id": line.pk,
+                    "line_name": line.line_name,
+                    "allocated_amount": str(line.allocated_amount),
+                    "spent_amount": str(line.spent_amount),
+                    "remaining_amount": str(line.remaining_amount),
+                }
+                for line in budget_lines
+            ],
+            "transactions": [
+                {
+                    "id": transaction.pk,
+                    "budget_line": transaction.budget_line_id,
+                    "amount": str(transaction.amount),
+                    "currency": transaction.currency,
+                    "transaction_date": transaction.transaction_date.isoformat(),
+                    "bank_reference_number": transaction.bank_reference_number,
+                    "status": transaction.status,
+                }
+                for transaction in transactions
+            ],
+            "reconciliations": [
+                {
+                    "id": reconciliation.pk,
+                    "transaction": reconciliation.transaction_id,
+                    "bank_statement_line": reconciliation.bank_statement_line_id,
+                    "status": reconciliation.status,
+                    "difference_amount": str(reconciliation.difference_amount),
+                    "created_at": reconciliation.created_at.isoformat(),
+                    "matched_at": reconciliation.matched_at.isoformat() if reconciliation.matched_at else None,
+                }
+                for reconciliation in reconciliations
+            ],
+        }
+
     def perform_create(self, serializer):
         instance = serializer.save(generated_by=self.request.user)
+        custom_fields = instance.custom_fields or {}
+        custom_fields["snapshot"] = self._build_report_snapshot(instance)
+        instance.custom_fields = custom_fields
+        instance.save(update_fields=["custom_fields"])
         self._write_audit_log(self.audit_create_action, instance)
         
         # Notify donors who funded this grant's project
@@ -65,7 +143,7 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
             if donor:
                 donor_user = User.objects.filter(email=donor.contact_email).first()
                 if donor_user:
-                    project_name = instance.grant.project_set.first().name if instance.grant.project_set.exists() else instance.grant.grant_title
+                    project_name = instance.grant.projects.first().name if instance.grant.projects.exists() else instance.grant.grant_title
                     Notification.objects.create(
                         user=donor_user,
                         type='impact_report_ready',
