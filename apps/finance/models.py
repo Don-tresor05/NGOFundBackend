@@ -184,6 +184,7 @@ class Transaction(models.Model):
         CLEARED = "cleared", "Cleared"
         RECONCILED = "reconciled", "Reconciled"
 
+    donor = models.ForeignKey("donors.Donor", on_delete=models.SET_NULL, null=True, blank=True, related_name="transactions")
     requisition = models.ForeignKey("requisitions.Requisition", on_delete=models.PROTECT, related_name="transactions", null=True, blank=True)
     budget_line = models.ForeignKey("projects.BudgetLine", on_delete=models.PROTECT, related_name="transactions")
     bank_account = models.ForeignKey(
