@@ -63,7 +63,8 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
         donor = grant.donor
         budget_lines = BudgetLine.objects.filter(grant=grant).order_by("line_name")
         projects = Project.objects.filter(grant=grant).order_by("name")
-        transactions = Transaction.objects.filter(budget_line__grant=grant).order_by("-transaction_date", "-created_at")
+        transactions = Transaction.objects.filter(budget_line__grant=grant).select_related("donor").order_by("-transaction_date", "-created_at")
+        donor_transactions = Transaction.objects.filter(donor=donor).order_by("-transaction_date", "-created_at")
         reconciliations = Reconciliation.objects.filter(transaction__budget_line__grant=grant).order_by("-created_at")
         requisitions = Requisition.objects.filter(budget_line__grant=grant).order_by("-created_at")
         expense_approvals = ExpenseApproval.objects.filter(requisition__budget_line__grant=grant).order_by("-created_at")
@@ -80,8 +81,8 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
         allocated_total = sum((line.allocated_amount for line in budget_lines), 0)
         spent_total = sum((line.spent_amount for line in budget_lines), 0)
         remaining_total = allocated_total - spent_total
-        cleared_total = transactions.filter(status__in=[Transaction.Status.CLEARED, Transaction.Status.RECONCILED]).aggregate(total=Sum("amount"))["total"] or 0
-        contribution_total = transactions.filter(requisition__isnull=True).aggregate(total=Sum("amount"))["total"] or 0
+        cleared_total = donor_transactions.filter(status__in=[Transaction.Status.CLEARED, Transaction.Status.RECONCILED]).aggregate(total=Sum("amount"))["total"] or 0
+        contribution_total = donor_transactions.aggregate(total=Sum("amount"))["total"] or 0
         budget_variance = remaining_total
         utilization_percent = (spent_total / allocated_total * 100) if allocated_total else 0
         burn_rate = spent_total / 12 if spent_total else 0
@@ -114,7 +115,7 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 "contributions_received": str(contribution_total),
                 "cleared_funds": str(cleared_total),
                 "projects_supported": projects.count(),
-                "receipts_generated": transactions.count(),
+                "receipts_generated": donor_transactions.count(),
                 "impact_reports_delivered": ReportDelivery.objects.filter(report__grant=grant, status=ReportDelivery.Status.SENT).count(),
             },
             "project_utilization": {
@@ -196,6 +197,7 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     "budget_line": transaction.budget_line_id,
                     "amount": str(transaction.amount),
                     "currency": transaction.currency,
+                    "donor": transaction.donor_id,
                     "transaction_date": transaction.transaction_date.isoformat(),
                     "bank_reference_number": transaction.bank_reference_number,
                     "status": transaction.status,
