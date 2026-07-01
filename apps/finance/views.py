@@ -65,7 +65,7 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
             total_budget = _decimal(budget_lines.aggregate(total=Sum("allocated_amount"))["total"])
             total_spent = _decimal(budget_lines.aggregate(total=Sum("spent_amount"))["total"])
             total_income = _decimal(
-                transactions.filter(status__in=[Transaction.Status.CLEARED, Transaction.Status.RECONCILED]).aggregate(total=Sum("amount"))["total"]
+                transactions.filter(donor__isnull=False, status__in=[Transaction.Status.CLEARED, Transaction.Status.RECONCILED]).aggregate(total=Sum("amount"))["total"]
             )
             scheduled_total = _decimal(
                 scheduled_payments.exclude(status__in=[ScheduledPayment.Status.PAID, ScheduledPayment.Status.CANCELLED]).aggregate(total=Sum("amount"))["total"]
@@ -344,15 +344,15 @@ class CurrencyRateViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
 
 class TransactionViewSet(AuditLogMixin, viewsets.ModelViewSet):
-    queryset = Transaction.objects.select_related("requisition", "budget_line", "processed_by")
+    queryset = Transaction.objects.select_related("donor", "requisition", "budget_line", "processed_by")
     serializer_class = TransactionSerializer
     allowed_roles = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.DONOR_USER]
     required_permissions = ["manage_finance"]
     action_roles = {
         "reconcile": [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR],
     }
-    filterset_fields = ["budget_line", "processed_by", "status", "transaction_date"]
-    search_fields = ["bank_reference_number", "budget_line__line_name"]
+    filterset_fields = ["donor", "budget_line", "processed_by", "status", "transaction_date"]
+    search_fields = ["bank_reference_number", "budget_line__line_name", "donor__organization_name", "donor__contact_email"]
     ordering_fields = ["transaction_date", "amount", "status", "created_at"]
     
     def get_permissions(self):
