@@ -81,6 +81,14 @@ class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
         donor = self.get_object()
         communications = donor.communications.order_by("-communication_date")
         last_contact = communications.first()
+        from apps.finance.models import Transaction
+        from apps.projects.models import Project
+        grant_ids = donor.grants.values_list("pk", flat=True)
+        total_donated = Transaction.objects.filter(
+            budget_line__grant_id__in=grant_ids,
+            status__in=["cleared", "reconciled"],
+        ).aggregate(total=models.Sum("amount"))["total"] or 0
+        supported_projects = Project.objects.filter(grant_id__in=grant_ids).count()
         return Response(
             {
                 "donor_id": donor.pk,
@@ -93,6 +101,8 @@ class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 "recent_communications": DonorCommunicationSerializer(communications[:5], many=True).data,
                 "engagement_score": min(100, communications.count() * 20 + (10 if donor.status == Donor.Status.ACTIVE else 0)),
                 "next_action": "Schedule follow-up" if communications.count() < 3 else "Maintain relationship",
+                "total_donated": total_donated,
+                "supported_projects": supported_projects,
             }
         )
 
