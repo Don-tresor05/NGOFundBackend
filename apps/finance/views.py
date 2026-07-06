@@ -166,11 +166,23 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
             ).data
 
             monthly_burn_rate = total_spent / Decimal("12") if total_spent else Decimal("0")
+            remaining_budget = total_budget - total_spent
+            deficit_amount = abs(remaining_budget) if remaining_budget < 0 else Decimal("0")
+            budget_utilization = float((total_spent / total_budget) * 100) if total_budget else 0.0
+            if remaining_budget < 0:
+                budget_status = "over_budget"
+                runway_months = None
+            elif budget_utilization >= 90:
+                budget_status = "at_risk"
+                runway_months = int(remaining_budget / monthly_burn_rate) if monthly_burn_rate > 0 else None
+            else:
+                budget_status = "healthy"
+                runway_months = int(remaining_budget / monthly_burn_rate) if monthly_burn_rate > 0 else None
             forecast = {
                 "monthly_burn_rate": monthly_burn_rate,
-                "next_month_balance": (total_budget - total_spent) - monthly_burn_rate,
-                "three_month_balance": (total_budget - total_spent) - (monthly_burn_rate * Decimal("3")),
-                "runway_months": int((total_budget - total_spent) / monthly_burn_rate) if monthly_burn_rate > 0 else None,
+                "next_month_balance": remaining_budget - monthly_burn_rate,
+                "three_month_balance": remaining_budget - (monthly_burn_rate * Decimal("3")),
+                "runway_months": runway_months,
             }
 
             return Response(
@@ -178,7 +190,7 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                     "totals": {
                         "total_budget": total_budget,
                         "total_spent": total_spent,
-                        "remaining_budget": total_budget - total_spent,
+                        "remaining_budget": remaining_budget,
                         "total_income": total_income,
                         "scheduled_payments": scheduled_total,
                         "overdue_payments": overdue_total,
@@ -188,6 +200,16 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                         ).count(),
                         "unmatched_statement_lines": statement_lines.filter(matched=False).count(),
                         "reconciliation_exceptions": reconciliations.filter(status=Reconciliation.Status.EXCEPTION).count(),
+                    },
+                    "budget_health": {
+                        "status": budget_status,
+                        "deficit_amount": deficit_amount,
+                        "utilization": round(budget_utilization, 2),
+                        "message": "Budget exceeded. Immediate reallocation or spending review is required."
+                        if budget_status == "over_budget"
+                        else "Budget is nearing approved limits. Review upcoming commitments."
+                        if budget_status == "at_risk"
+                        else "Budget position is within approved limits.",
                     },
                     "project_budgets": project_rows,
                     "budget_alerts": sorted(alerts, key=lambda row: row["utilization"], reverse=True),
@@ -212,6 +234,12 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                         "pending_expense_approvals": 0,
                         "unmatched_statement_lines": 0,
                         "reconciliation_exceptions": 0,
+                    },
+                    "budget_health": {
+                        "status": "healthy",
+                        "deficit_amount": Decimal("0"),
+                        "utilization": 0,
+                        "message": "Budget position is within approved limits.",
                     },
                     "project_budgets": [],
                     "budget_alerts": [],
