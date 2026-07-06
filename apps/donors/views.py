@@ -1,7 +1,7 @@
 import csv
 from django.http import HttpResponse
 from django.utils import timezone
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Sum
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -87,7 +87,7 @@ class DonorViewSet(AuditLogMixin, viewsets.ModelViewSet):
         total_donated = Transaction.objects.filter(
             budget_line__grant_id__in=grant_ids,
             status__in=["cleared", "reconciled"],
-        ).aggregate(total=models.Sum("amount"))["total"] or 0
+        ).aggregate(total=Sum("amount"))["total"] or 0
         supported_projects = Project.objects.filter(grant_id__in=grant_ids).count()
         return Response(
             {
