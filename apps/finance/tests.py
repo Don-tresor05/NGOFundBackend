@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -288,6 +289,17 @@ class FinanceControlsTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["created"], 1)
         self.assertTrue(SpendingAlert.objects.filter(budget_line=self.budget_line).exists())
+
+    def test_finance_dashboard_marks_over_budget_state(self):
+        self.budget_line.spent_amount = 12000
+        self.budget_line.save(update_fields=["spent_amount"])
+
+        response = self.client.get(reverse("finance-dashboard-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["budget_health"]["status"], "over_budget")
+        self.assertEqual(response.data["budget_health"]["deficit_amount"], Decimal("2000"))
+        self.assertIsNone(response.data["forecast"]["runway_months"])
 
     def test_payment_batch_processes_scheduled_payments(self):
         payment = ScheduledPayment.objects.create(
