@@ -273,6 +273,22 @@ class ReportViewSet(AuditLogMixin, viewsets.ModelViewSet):
                         message=f'A new {instance.report_type} report is ready for {project_name}. See the impact of your contribution!'
                     )
 
+    @action(detail=False, methods=["post"], url_path="backfill-snapshots")
+    def backfill_snapshots(self, request):
+        reports = Report.objects.filter(grant__isnull=False).exclude(
+            custom_fields__snapshot__isnull=False
+        )
+        updated = 0
+        for report in reports:
+            custom_fields = report.custom_fields or {}
+            if custom_fields.get("snapshot"):
+                continue
+            custom_fields["snapshot"] = self._build_report_snapshot(report)
+            report.custom_fields = custom_fields
+            report.save(update_fields=["custom_fields"])
+            updated += 1
+        return Response({"backfilled": updated})
+
     @action(detail=True, methods=["post"], url_path="deliver")
     def deliver(self, request, pk=None):
         report = self.get_object()
