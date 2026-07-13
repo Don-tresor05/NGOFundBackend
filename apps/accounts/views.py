@@ -274,7 +274,6 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
     allowed_roles = [Role.SUPER_ADMIN, Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR]
-    required_permissions = ["manage_users"]
     action_roles = {
         "list": [Role.SUPER_ADMIN, Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR],
         "retrieve": [Role.SUPER_ADMIN, Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR],
