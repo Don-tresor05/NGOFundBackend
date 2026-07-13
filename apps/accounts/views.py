@@ -273,8 +273,16 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related("role").order_by("-created_at")
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, RoleBasedPermission]
-    allowed_roles = [Role.SUPER_ADMIN]
+    allowed_roles = [Role.SUPER_ADMIN, Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR]
     required_permissions = ["manage_users"]
+    action_roles = {
+        "list": [Role.SUPER_ADMIN, Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR],
+        "retrieve": [Role.SUPER_ADMIN, Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR, Role.EXTERNAL_AUDITOR],
+        "create": [Role.SUPER_ADMIN],
+        "update": [Role.SUPER_ADMIN],
+        "partial_update": [Role.SUPER_ADMIN],
+        "destroy": [Role.SUPER_ADMIN],
+    }
     search_fields = ["full_name", "email", "role__role_name", "role_id"]
     ordering_fields = ["created_at", "full_name", "email", "role_id"]
 
