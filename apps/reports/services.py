@@ -26,8 +26,8 @@ def _section_rows(data: dict) -> str:
     for k, v in data.items():
         label = k.replace("_", " ").title()
         rows += (
-            f"<tr><td style='padding:6px 12px;color:#6b7280;border-bottom:1px solid #f3f4f6'>{label}</td>"
-            f"<td style='padding:6px 12px;font-weight:600;text-align:right;border-bottom:1px solid #f3f4f6'>{_fmt(v)}</td></tr>"
+            f"<tr><td style='padding:7px 14px;color:#6b7280;border-bottom:1px solid #fef3c7;font-size:13px'>{label}</td>"
+            f"<td style='padding:7px 14px;font-weight:600;text-align:right;border-bottom:1px solid #fef3c7;color:#0f2942;font-size:13px'>{_fmt(v)}</td></tr>"
         )
     return rows
 
@@ -47,40 +47,60 @@ def build_report_delivery_body(report: Report, delivery: ReportDelivery) -> str:
         if not data:
             continue
         sections_html += (
-            f"<h3 style='margin:24px 0 8px;font-size:14px;color:#374151;border-bottom:2px solid #e5e7eb;padding-bottom:6px'>{title}</h3>"
-            f"<table width='100%' cellpadding='0' cellspacing='0' style='font-size:13px;background:#f9fafb;border-radius:6px'>{_section_rows(data)}</table>"
+            f"<h3 style='margin:24px 0 8px;font-size:13px;font-weight:700;color:#0f2942;text-transform:uppercase;letter-spacing:0.5px;border-left:3px solid #f59e0b;padding-left:10px'>{title}</h3>"
+            f"<table width='100%' cellpadding='0' cellspacing='0' style='background:#fffbf0;border-radius:8px;border:1px solid #fef3c7;overflow:hidden'>{_section_rows(data)}</table>"
         )
 
     budget_lines = snap.get("budget_lines", [])
     if budget_lines:
         rows = "".join(
-            f"<tr><td style='padding:6px 12px;border-bottom:1px solid #f3f4f6'>{bl.get('line_name','')}</td>"
-            f"<td style='padding:6px 12px;text-align:right;border-bottom:1px solid #f3f4f6'>{_fmt(bl.get('allocated_amount'))}</td>"
-            f"<td style='padding:6px 12px;text-align:right;border-bottom:1px solid #f3f4f6'>{_fmt(bl.get('spent_amount'))}</td>"
-            f"<td style='padding:6px 12px;text-align:right;border-bottom:1px solid #f3f4f6'>{_fmt(bl.get('remaining_amount'))}</td></tr>"
+            f"<tr><td style='padding:7px 14px;border-bottom:1px solid #fef3c7;font-size:13px'>{bl.get('line_name','')}</td>"
+            f"<td style='padding:7px 14px;text-align:right;border-bottom:1px solid #fef3c7;font-size:13px'>{_fmt(bl.get('allocated_amount'))}</td>"
+            f"<td style='padding:7px 14px;text-align:right;border-bottom:1px solid #fef3c7;font-size:13px'>{_fmt(bl.get('spent_amount'))}</td>"
+            f"<td style='padding:7px 14px;text-align:right;border-bottom:1px solid #fef3c7;font-size:13px;color:{'#dc2626' if float(bl.get('remaining_amount',0) or 0) < 0 else '#059669'}'>{_fmt(bl.get('remaining_amount'))}</td></tr>"
             for bl in budget_lines
         )
         sections_html += (
-            "<h3 style='margin:24px 0 8px;font-size:14px;color:#374151;border-bottom:2px solid #e5e7eb;padding-bottom:6px'>Budget Lines</h3>"
-            "<table width='100%' cellpadding='0' cellspacing='0' style='font-size:13px;background:#f9fafb;border-radius:6px'>"
-            "<tr style='background:#e5e7eb;font-weight:600'>"
-            "<td style='padding:8px 12px'>Line</td><td style='padding:8px 12px;text-align:right'>Allocated</td>"
-            "<td style='padding:8px 12px;text-align:right'>Spent</td><td style='padding:8px 12px;text-align:right'>Remaining</td></tr>"
+            "<h3 style='margin:24px 0 8px;font-size:13px;font-weight:700;color:#0f2942;text-transform:uppercase;letter-spacing:0.5px;border-left:3px solid #f59e0b;padding-left:10px'>Budget Lines</h3>"
+            "<table width='100%' cellpadding='0' cellspacing='0' style='background:#fffbf0;border-radius:8px;border:1px solid #fef3c7;overflow:hidden'>"
+            "<tr style='background:linear-gradient(90deg,#0f2942,#1a4068);color:#ffffff;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px'>"
+            "<td style='padding:9px 14px'>Line</td><td style='padding:9px 14px;text-align:right'>Allocated</td>"
+            "<td style='padding:9px 14px;text-align:right'>Spent</td><td style='padding:9px 14px;text-align:right'>Remaining</td></tr>"
             f"{rows}</table>"
         )
 
     return (
-        "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif'>"
-        "<table width='100%' cellpadding='0' cellspacing='0' style='background:#f3f4f6;padding:32px 0'><tr><td align='center'>"
-        "<table width='600' cellpadding='0' cellspacing='0' style='background:#ffffff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)'>"
-        "<tr><td style='background:#1e3a5f;padding:28px 32px;border-radius:12px 12px 0 0'>"
-        f"<h1 style='margin:0;color:#ffffff;font-size:20px'>{report.report_type}</h1>"
-        f"<p style='margin:6px 0 0;color:#93c5fd;font-size:13px'>{grant.grant_title} &nbsp;·&nbsp; {report.format} &nbsp;·&nbsp; {report.created_at.strftime('%d %b %Y')}</p>"
-        "</td></tr>"
-        f"<tr><td style='padding:24px 32px 32px'>{sections_html}"
-        f"<p style='margin:32px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px'>"
-        f"Generated by NGO Fund Platform &nbsp;·&nbsp; Rwanda Paediatric Association<br>Delivered to: {delivery.destination}</p>"
-        "</td></tr></table></td></tr></table></body></html>"
+        "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f7f3e8;font-family:Inter,Arial,sans-serif'>"
+        "<table width='100%' cellpadding='0' cellspacing='0' style='background:#f7f3e8;padding:36px 0'><tr><td align='center'>"
+        "<table width='620' cellpadding='0' cellspacing='0' style='background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(148,118,39,0.13);border:1px solid #f0e6c8'>"
+
+        # Header
+        "<tr><td style='background:linear-gradient(135deg,#0f2942 0%,#1a4068 60%,#1f6f78 100%);padding:32px 36px'>"
+        "<table width='100%' cellpadding='0' cellspacing='0'><tr>"
+        "<td><div style='width:40px;height:40px;background:rgba(255,200,87,0.2);border-radius:10px;display:inline-block;text-align:center;line-height:40px;font-size:20px;margin-bottom:12px'>📊</div>"
+        f"<h1 style='margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px'>{report.report_type}</h1>"
+        f"<p style='margin:6px 0 0;color:#93c5fd;font-size:13px'>{grant.grant_title} &nbsp;·&nbsp; "
+        f"<span style='background:rgba(255,200,87,0.25);color:#fcd34d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600'>{report.format}</span>"
+        f" &nbsp;·&nbsp; {report.created_at.strftime('%d %b %Y')}</p></td>"
+        "</tr></table></td></tr>"
+
+        # Gold divider
+        "<tr><td style='height:4px;background:linear-gradient(90deg,#f59e0b,#fcd34d,#1f6f78)'></td></tr>"
+
+        # Body
+        f"<tr><td style='padding:28px 36px 36px'>{sections_html}"
+
+        # Footer
+        "<tr><td style='padding:0 36px 28px'>"
+        "<table width='100%' cellpadding='0' cellspacing='0' style='border-top:1px solid #f0e6c8;padding-top:20px;margin-top:8px'><tr>"
+        "<td style='font-size:12px;color:#9ca3af'>"
+        "Generated by <strong style='color:#0f2942'>NGO Fund Platform</strong> &nbsp;·&nbsp; Rwanda Paediatric Association<br>"
+        f"<span style='color:#b45309'>Delivered to: {delivery.destination}</span>"
+        "</td>"
+        "<td align='right'><div style='width:32px;height:32px;background:linear-gradient(135deg,#0f2942,#1f6f78);border-radius:8px;display:inline-block'></div></td>"
+        "</tr></table></td></tr>"
+
+        "</table></td></tr></table></body></html>"
     )
 
 
