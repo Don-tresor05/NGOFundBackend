@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError
 from django.core.mail import EmailMessage
 from django.db import transaction
 from django.db.models import Q
