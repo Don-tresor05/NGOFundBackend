@@ -253,7 +253,7 @@ def handle_checkout_completed(session):
     """Process completed checkout and create transaction"""
     try:
         from apps.projects.models import BudgetLine
-        from apps.accounts.models import User, Notification
+        from apps.accounts.models import Role, User, Notification
         
         checkout_session = StripeCheckoutSession.objects.get(session_id=session["id"])
         donor = checkout_session.donor
@@ -304,10 +304,10 @@ def handle_checkout_completed(session):
         checkout_session.completed_at = timezone.now()
         checkout_session.save()
         
+        project_name = checkout_session.project.name if checkout_session.project else "General Fund"
+        
         # Create notification for donor user
         if donor_user:
-            project_name = checkout_session.project.name if checkout_session.project else "General Fund"
-            
             # Payment success notification
             Notification.objects.create(
                 user=donor_user,
@@ -322,6 +322,36 @@ def handle_checkout_completed(session):
                 type="thank_you",
                 title="Thank You for Your Generosity!",
                 message=f"We are deeply grateful for your ${checkout_session.amount} donation to {project_name}. Your contribution is making a real difference in our community. We'll keep you updated on the impact of your support!"
+            )
+        
+        # Notify all staff members about the new donation with donor details
+        staff_roles = Role.objects.filter(
+            role_key__in=[
+                Role.SUPER_ADMIN,
+                Role.FINANCE_OFFICER,
+                Role.PROJECT_MANAGER,
+                Role.EXECUTIVE_DIRECTOR,
+                Role.FIELD_STAFF,
+                Role.EXTERNAL_AUDITOR,
+            ]
+        )
+        staff_users = User.objects.filter(role__in=staff_roles, is_active=True)
+        
+        donation_reference = session["payment_intent"] or session["id"]
+        donation_date = checkout_session.completed_at or timezone.now()
+        donor_name = donor.organization_name or donor.contact_person
+        
+        for staff_user in staff_users:
+            Notification.objects.create(
+                user=staff_user,
+                type="new_donation",
+                title="New Donation Received",
+                message=(
+                    f"{donor_name} ({donor.contact_email}) just donated "
+                    f"${checkout_session.amount} to {project_name}. "
+                    f"Reference: {donation_reference} | Type: {checkout_session.donation_type} | "
+                    f"Date: {donation_date.strftime('%B %d, %Y %H:%M')}"
+                )
             )
         
         # Send acknowledgment email
