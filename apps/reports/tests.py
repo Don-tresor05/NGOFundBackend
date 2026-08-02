@@ -202,3 +202,48 @@ class ReportWorkflowTests(APITestCase):
         self.assertEqual(snapshot["project_utilization"]["project_count"], 1)
         self.assertEqual(snapshot["reconciliation_report"]["matched_items"], 1)
         self.assertGreaterEqual(snapshot["audit_compliance_report"]["missing_receipts"], 1)
+
+    def test_email_delivery_attaches_branded_pdf(self):
+        """Every email delivery attaches the server-generated branded PDF."""
+        BudgetLine.objects.create(
+            grant=self.grant,
+            line_name="Clinical Supplies",
+            allocated_amount=10000,
+            spent_amount=2500,
+        )
+        response = self.client.post(
+            reverse("reports-list"),
+            {
+                "grant": self.grant.id,
+                "report_type": "Monthly Finance",
+                "format": "PDF",
+                "custom_fields": {"audience": "Finance", "sections": ["financial-summary"]},
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        report = Report.objects.get(pk=response.data["id"])
+        self.assertIn("snapshot", report.custom_fields)
+
+        deliver_response = self.client.post(
+            reverse("reports-deliver", args=[report.id]),
+            {"destination": "board@example.com", "delivery_method": "email"},
+            format="json",
+        )
+        self.assertEqual(deliver_response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+
+        message = mail.outbox[0]
+        pdf_attachments = [
+            (name, content, mime)
+            for name, content, mime in message.attachments
+            if name.endswith(".pdf")
+        ]
+        self.assertEqual(len(pdf_attachments), 1)
+        name, content, mime = pdf_attachments[0]
+        self.assertEqual(mime, "application/pdf")
+        self.assertTrue(content.startswith(b"%PDF"))
+        self.assertGreater(len(content), 1000)
+
+        delivery = ReportDelivery.objects.get(pk=deliver_response.data["id"])
+        self.assertEqual(delivery.status, ReportDelivery.Status.SENT)
