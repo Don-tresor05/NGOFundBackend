@@ -62,6 +62,15 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
             statement_lines = BankStatementLine.objects.select_related("bank_statement", "bank_statement__bank_account")
             reconciliations = Reconciliation.objects.select_related("transaction", "bank_statement_line")
 
+            # Base display currency: the currency of the grant(s) holding the largest allocation,
+            # falling back to RWF (the platform's default transaction currency).
+            currency_rows = (
+                budget_lines.values("grant__currency")
+                .annotate(total=Sum("allocated_amount"))
+                .order_by("-total")
+            )
+            base_currency = (currency_rows[0]["grant__currency"] or "RWF") if currency_rows else "RWF"
+
             total_budget = _decimal(budget_lines.aggregate(total=Sum("allocated_amount"))["total"])
             total_spent = _decimal(budget_lines.aggregate(total=Sum("spent_amount"))["total"])
             total_income = _decimal(
@@ -88,6 +97,7 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                         "project_name": project.name,
                         "grant_id": project.grant_id,
                         "grant_title": project.grant.grant_title,
+                        "currency": project.grant.currency or base_currency,
                         "allocated": allocated,
                         "spent": spent,
                         "remaining": allocated - spent,
@@ -113,6 +123,7 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                         "budget_line_id": line.pk,
                         "budget_line": line.line_name,
                         "grant": line.grant.grant_title,
+                        "currency": line.grant.currency or base_currency,
                         "allocated": line.allocated_amount,
                         "spent": line.spent_amount,
                         "remaining": line.remaining_amount,
@@ -211,6 +222,7 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                         if budget_status == "at_risk"
                         else "Budget position is within approved limits.",
                     },
+                    "currency": base_currency,
                     "project_budgets": project_rows,
                     "budget_alerts": sorted(alerts, key=lambda row: row["utilization"], reverse=True),
                     "bank_accounts": account_rows,
@@ -241,6 +253,7 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                         "utilization": 0,
                         "message": "Budget position is within approved limits.",
                     },
+                    "currency": "RWF",
                     "project_budgets": [],
                     "budget_alerts": [],
                     "bank_accounts": [],
