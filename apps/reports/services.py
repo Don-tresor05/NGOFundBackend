@@ -9,6 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.reports.models import Report, ReportDelivery, ReportSchedule
+from apps.reports.pdf import build_report_pdf, report_pdf_filename
 
 
 def _fmt(value) -> str:
@@ -27,7 +28,7 @@ def _section_rows(data: dict) -> str:
         label = k.replace("_", " ").title()
         rows += (
             f"<tr><td style='padding:7px 14px;color:#6b7280;border-bottom:1px solid #eef0f3;font-size:13px'>{label}</td>"
-            f"<td style='padding:7px 14px;font-weight:600;text-align:right;border-bottom:1px solid #eef0f3;color:#0f2942;font-size:13px'>{_fmt(v)}</td></tr>"
+            f"<td style='padding:7px 14px;font-weight:600;text-align:right;border-bottom:1px solid #eef0f3;color:#1e293b;font-size:13px'>{_fmt(v)}</td></tr>"
         )
     return rows
 
@@ -47,7 +48,7 @@ def build_report_delivery_body(report: Report, delivery: ReportDelivery) -> str:
         if not data:
             continue
         sections_html += (
-            f"<h3 style='margin:20px 0 6px;font-size:11px;font-weight:700;color:#1a4068;text-transform:uppercase;letter-spacing:0.6px'>{title}</h3>"
+            f"<h3 style='margin:20px 0 6px;font-size:11px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.6px'>{title}</h3>"
             f"<table width='100%' cellpadding='0' cellspacing='0' style='background:#f8f9fb;border-radius:6px;border:1px solid #e4e8ee;overflow:hidden'>{_section_rows(data)}</table>"
         )
 
@@ -57,13 +58,13 @@ def build_report_delivery_body(report: Report, delivery: ReportDelivery) -> str:
             f"<tr><td style='padding:7px 14px;border-bottom:1px solid #eef0f3;font-size:13px'>{bl.get('line_name','')}</td>"
             f"<td style='padding:7px 14px;text-align:right;border-bottom:1px solid #eef0f3;font-size:13px'>{_fmt(bl.get('allocated_amount'))}</td>"
             f"<td style='padding:7px 14px;text-align:right;border-bottom:1px solid #eef0f3;font-size:13px'>{_fmt(bl.get('spent_amount'))}</td>"
-            f"<td style='padding:7px 14px;text-align:right;border-bottom:1px solid #eef0f3;font-size:13px;color:{'#c0392b' if float(bl.get('remaining_amount',0) or 0) < 0 else '#1a6b3c'}'>{_fmt(bl.get('remaining_amount'))}</td></tr>"
+            f"<td style='padding:7px 14px;text-align:right;border-bottom:1px solid #eef0f3;font-size:13px;color:{'#dc2626' if float(bl.get('remaining_amount',0) or 0) < 0 else '#15803d'}'>{_fmt(bl.get('remaining_amount'))}</td></tr>"
             for bl in budget_lines
         )
         sections_html += (
-            "<h3 style='margin:20px 0 6px;font-size:11px;font-weight:700;color:#1a4068;text-transform:uppercase;letter-spacing:0.6px'>Budget Lines</h3>"
+            "<h3 style='margin:20px 0 6px;font-size:11px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.6px'>Budget Lines</h3>"
             "<table width='100%' cellpadding='0' cellspacing='0' style='background:#f8f9fb;border-radius:6px;border:1px solid #e4e8ee;overflow:hidden'>"
-            "<tr style='background:#1a4068;color:#ffffff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px'>"
+            "<tr style='background:#1e293b;color:#ffffff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px'>"
             "<td style='padding:8px 14px'>Line</td><td style='padding:8px 14px;text-align:right'>Allocated</td>"
             "<td style='padding:8px 14px;text-align:right'>Spent</td><td style='padding:8px 14px;text-align:right'>Remaining</td></tr>"
             f"{rows}</table>"
@@ -75,13 +76,13 @@ def build_report_delivery_body(report: Report, delivery: ReportDelivery) -> str:
         "<table width='620' cellpadding='0' cellspacing='0' style='background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.10);border:1px solid #dde2ea'>"
 
         # Header
-        "<tr><td style='background:#0f2942;padding:28px 32px'>"
-        f"<h1 style='margin:0;color:#ffffff;font-size:20px;font-weight:700'>{report.report_type}</h1>"
-        f"<p style='margin:6px 0 0;color:#93c5fd;font-size:13px'>{grant.grant_title} &nbsp;·&nbsp; {report.format} &nbsp;·&nbsp; {report.created_at.strftime('%d %b %Y')}</p>"
+        "<tr><td style='background:#fff3bf;padding:28px 32px'>"
+        f"<h1 style='margin:0;color:#0d1424;font-size:20px;font-weight:700'>{report.report_type}</h1>"
+        f"<p style='margin:6px 0 0;color:#475569;font-size:13px'>{grant.grant_title} &nbsp;·&nbsp; {report.format} &nbsp;·&nbsp; {report.created_at.strftime('%d %b %Y')}</p>"
         "</td></tr>"
 
-        # Navy top-border accent
-        "<tr><td style='height:3px;background:#1a4068'></td></tr>"
+        # Gold accent strip
+        "<tr><td style='height:3px;background:#f4b93f'></td></tr>"
 
         # Body
         f"<tr><td style='padding:28px 32px 32px'>{sections_html}"
@@ -99,6 +100,25 @@ def build_report_delivery_body(report: Report, delivery: ReportDelivery) -> str:
     )
 
 
+def _attach_branded_pdf(email: EmailMessage, report: Report, delivery: ReportDelivery) -> None:
+    """Generate and attach the branded PDF for this delivery.
+
+    The PDF is generated server-side from the report snapshot so scheduled
+    email deliveries always carry a real branded document, even when the
+    report has no uploaded file. Failures never block the delivery.
+    """
+    try:
+        recipient_name = (delivery.created_by.full_name if delivery.created_by_id else "") or "Unknown user"
+        pdf_bytes = build_report_pdf(
+            report,
+            recipient_name=recipient_name,
+            recipient_email=delivery.destination,
+        )
+        email.attach(report_pdf_filename(report.report_type), pdf_bytes, "application/pdf")
+    except Exception:  # pragma: no cover - surfaced via delivery status
+        pass
+
+
 def dispatch_report_delivery(delivery: ReportDelivery) -> ReportDelivery:
     report = delivery.report
     subject = f"{report.report_type} - {report.format}"
@@ -112,6 +132,7 @@ def dispatch_report_delivery(delivery: ReportDelivery) -> ReportDelivery:
                 to=[delivery.destination],
             )
             email.content_subtype = "html"
+            _attach_branded_pdf(email, report, delivery)
             if report.file:
                 try:
                     email.attach_file(report.file.path)
