@@ -19,10 +19,19 @@ class BudgetLineSerializer(serializers.ModelSerializer):
 
 
 class ReallocationRequestSerializer(serializers.ModelSerializer):
+    source_budget_line_name = serializers.SerializerMethodField()
+    target_budget_line_name = serializers.SerializerMethodField()
+
     class Meta:
         model = ReallocationRequest
         fields = "__all__"
         read_only_fields = ["requested_by", "reviewed_by", "reviewed_at", "created_at", "status"]
+
+    def get_source_budget_line_name(self, obj):
+        return obj.source_budget_line.line_name if obj.source_budget_line_id else "—"
+
+    def get_target_budget_line_name(self, obj):
+        return obj.target_budget_line.line_name if obj.target_budget_line_id else "—"
 
     def validate(self, attrs):
         source = attrs.get("source_budget_line", getattr(self.instance, "source_budget_line", None))
