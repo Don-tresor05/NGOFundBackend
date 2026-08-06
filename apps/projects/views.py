@@ -105,8 +105,12 @@ class ReallocationRequestViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
         request_item = self.get_object()
+        if request_item.status != ReallocationRequest.Status.PENDING:
+            return Response({"detail": "This request has already been reviewed."}, status=400)
         with db_transaction.atomic():
-            request_item.refresh_from_db()
+            request_item = ReallocationRequest.objects.select_for_update().get(pk=request_item.pk)
+            if request_item.status != ReallocationRequest.Status.PENDING:
+                return Response({"detail": "This request has already been reviewed."}, status=400)
             source = request_item.source_budget_line
             target = request_item.target_budget_line
             if request_item.amount > source.remaining_amount:
@@ -125,6 +129,8 @@ class ReallocationRequestViewSet(AuditLogMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, pk=None):
         request_item = self.get_object()
+        if request_item.status != ReallocationRequest.Status.PENDING:
+            return Response({"detail": "This request has already been reviewed."}, status=400)
         request_item.status = ReallocationRequest.Status.REJECTED
         request_item.reviewed_by = request.user
         request_item.reviewed_at = timezone.now()
