@@ -4,9 +4,20 @@ from apps.projects.models import BudgetLine, Project, ProjectMember, Reallocatio
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Project
         fields = "__all__"
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        if request is not None:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class BudgetLineSerializer(serializers.ModelSerializer):
