@@ -10,6 +10,7 @@ class Project(models.Model):
     grant = models.ForeignKey("grants.Grant", on_delete=models.PROTECT, related_name="projects")
     name = models.CharField(max_length=180)
     description = models.TextField(blank=True)
+    image = models.ImageField(upload_to="project_images/", blank=True, null=True)
     start_date = models.DateField()
     end_date = models.DateField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
