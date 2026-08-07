@@ -1,14 +1,22 @@
 from rest_framework import serializers
 
+from apps.accounts.models import Role
 from apps.projects.models import BudgetLine, Project, ProjectMember, ReallocationRequest
+
+PROJECT_EDIT_ROLES = [Role.FINANCE_OFFICER, Role.PROJECT_MANAGER, Role.EXECUTIVE_DIRECTOR]
+PROJECT_ARCHIVE_ROLES = [Role.FINANCE_OFFICER, Role.EXECUTIVE_DIRECTOR]
 
 
 class ProjectSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    can_archive = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
         fields = "__all__"
+        read_only_fields = ["created_by"]
 
     def get_image_url(self, obj):
         if not obj.image:
@@ -18,6 +26,29 @@ class ProjectSerializer(serializers.ModelSerializer):
         if request is not None:
             return request.build_absolute_uri(url)
         return url
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.email
+        return None
+
+    def get_can_edit(self, obj):
+        user = getattr(self.context.get("request"), "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or user.role_id == Role.SUPER_ADMIN:
+            return True
+        return user.role_id in PROJECT_EDIT_ROLES or (
+            obj.created_by_id is not None and obj.created_by_id == user.id
+        )
+
+    def get_can_archive(self, obj):
+        user = getattr(self.context.get("request"), "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or user.role_id == Role.SUPER_ADMIN:
+            return True
+        return user.role_id in PROJECT_ARCHIVE_ROLES
 
 
 class BudgetLineSerializer(serializers.ModelSerializer):
