@@ -6,11 +6,14 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
-from apps.accounts.models import Role
+from apps.accounts.models import Notification, Role, User
 from apps.accounts.permissions import RoleBasedPermission
 from apps.audit.mixins import AuditLogMixin
+from apps.donors.models import Donor
 from apps.projects.models import BudgetLine, Project, ProjectMember, ReallocationRequest
 from apps.projects.serializers import (
+    PROJECT_ARCHIVE_ROLES,
+    PROJECT_EDIT_ROLES,
     BudgetLineSerializer,
     ProjectMemberSerializer,
     ProjectSerializer,
@@ -37,6 +40,120 @@ class ProjectViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
         return [IsAuthenticated(), RoleBasedPermission()]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(created_by=self.request.user)
+        self._write_audit_log(self.audit_create_action, instance)
+        self._notify_donors_of_new_project(instance)
+
+    def _can_edit(self, project):
+        """The creator can edit their own project; managers can edit any project."""
+        user = self.request.user
+        if user.is_superuser or user.role_id == Role.SUPER_ADMIN:
+            return True
+        return user.role_id in PROJECT_EDIT_ROLES or (
+            project.created_by_id is not None and project.created_by_id == user.id
+        )
+
+    def _can_archive(self, project):
+        """Only Finance Officer / Executive Director can archive or delete projects."""
+        user = self.request.user
+        if user.is_superuser or user.role_id == Role.SUPER_ADMIN:
+            return True
+        return user.role_id in PROJECT_ARCHIVE_ROLES
+
+    def update(self, request, *args, **kwargs):
+        project = self.get_object()
+        if project.status == Project.Status.CANCELLED:
+            return Response({"detail": "Trashed projects cannot be edited. Restore the project first."}, status=400)
+        if not self._can_edit(project):
+            return Response({"detail": "You don't have permission to edit this project."}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        project = self.get_object()
+        if project.status == Project.Status.CANCELLED:
+            return Response({"detail": "Trashed projects cannot be edited. Restore the project first."}, status=400)
+        if not self._can_edit(project):
+            return Response({"detail": "You don't have permission to edit this project."}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete — archive the project instead of removing the record."""
+        project = self.get_object()
+        if not self._can_archive(project):
+            return Response({"detail": "You don't have permission to delete this project."}, status=403)
+        project.archived_from_status = project.status
+        project.status = Project.Status.CANCELLED
+        project.save(update_fields=["status", "archived_from_status"])
+        self._write_audit_log("PROJECT_ARCHIVED", project)
+        return Response(status=204)
+
+    @action(detail=True, methods=["post"], url_path="archive")
+    def archive(self, request, pk=None):
+        project = self.get_object()
+        if not self._can_archive(project):
+            return Response({"detail": "You don't have permission to move this project to the trash."}, status=403)
+        if project.status == Project.Status.CANCELLED:
+            return Response({"detail": "Project is already in the trash."}, status=400)
+        project.archived_from_status = project.status
+        project.status = Project.Status.CANCELLED
+        project.save(update_fields=["status", "archived_from_status"])
+        self._write_audit_log("PROJECT_ARCHIVED", project)
+        return Response(self.get_serializer(project).data)
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        project = self.get_object()
+        if not self._can_archive(project):
+            return Response({"detail": "You don't have permission to restore this project."}, status=403)
+        if project.status != Project.Status.CANCELLED:
+            return Response({"detail": "Only projects in the trash can be restored."}, status=400)
+        project.status = project.archived_from_status or Project.Status.ACTIVE
+        project.archived_from_status = None
+        project.save(update_fields=["status", "archived_from_status"])
+        self._write_audit_log("PROJECT_RESTORED", project)
+        return Response(self.get_serializer(project).data)
+
+    @action(detail=True, methods=["post"], url_path="delete-permanently")
+    def delete_permanently(self, request, pk=None):
+        project = self.get_object()
+        if not self._can_archive(project):
+            return Response({"detail": "You don't have permission to permanently delete this project."}, status=403)
+        if project.status != Project.Status.CANCELLED:
+            return Response({"detail": "Only projects in the trash can be permanently deleted."}, status=400)
+        self._write_audit_log("PROJECT_DELETED", project)
+        project.delete()
+        return Response(status=204)
+
+    def _notify_donors_of_new_project(self, project):
+        """Notify donor portal users when a new project is launched."""
+        donor_emails = list(
+            Donor.objects.filter(status=Donor.Status.ACTIVE).values_list("contact_email", flat=True)
+        )
+        if not donor_emails:
+            return
+        grant_title = project.grant.grant_title if project.grant else "General Fund"
+        donor_users = User.objects.filter(email__in=donor_emails, is_active=True).exclude(
+            pk=self.request.user.pk
+        )
+        if not donor_users.exists():
+            return
+        Notification.objects.bulk_create(
+            [
+                Notification(
+                    user=donor_user,
+                    type="new_project",
+                    title="New Project Launched",
+                    message=(
+                        f'Great news — a new project "{project.name}" is now running under the '
+                        f"{grant_title} grant. Visit the Projects page to explore it and see the "
+                        f"impact your support makes possible!"
+                    ),
+                )
+                for donor_user in donor_users
+            ]
+        )
 
     @action(detail=True, methods=["post"], url_path="activate")
     def activate(self, request, pk=None):
