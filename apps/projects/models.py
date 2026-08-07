@@ -6,14 +6,23 @@ class Project(models.Model):
         ACTIVE = "active", "Active"
         PENDING = "pending", "Pending"
         COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
 
     grant = models.ForeignKey("grants.Grant", on_delete=models.PROTECT, related_name="projects")
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_projects",
+    )
     name = models.CharField(max_length=180)
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to="project_images/", blank=True, null=True)
     start_date = models.DateField()
     end_date = models.DateField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    archived_from_status = models.CharField(max_length=20, blank=True, null=True)
 
     class Meta:
         ordering = ["name"]
